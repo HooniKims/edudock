@@ -52,7 +52,8 @@ function createUpdater({ app, shell, net, repository, env = process.env, loadAut
   function friendly(error) {
     const text = String(error?.message || error || '');
     if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|net::|network/i.test(text)) return '인터넷에 연결할 수 없어 업데이트를 확인하지 못했어요.';
-    if (/404/.test(text)) return '아직 올라온 릴리즈가 없어요.';
+    // electron-updater words a missing latest.yml / release in several ways depending on the provider.
+    if (/404|Cannot find latest|No published versions|latest\.yml/i.test(text)) return '아직 받을 수 있는 새 버전이 없어요.';
     return '업데이트를 확인하지 못했어요. 잠시 뒤 다시 시도해 주세요.';
   }
 

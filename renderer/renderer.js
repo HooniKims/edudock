@@ -201,7 +201,10 @@ function renderUpdate(update, version) {
     button.hidden = true; bar.hidden = true; return;
   }
   const phase = update.phase;
-  element('update-message').textContent = `${current} · ${update.message || '업데이트를 확인할 수 있어요.'}`;
+  const checked = Number.isFinite(update.checkedAt)
+    ? ` (마지막 확인 ${new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(update.checkedAt))})`
+    : '';
+  element('update-message').textContent = `${current} · ${update.message || '업데이트를 확인할 수 있어요.'}${checked}`;
   bar.hidden = phase !== 'downloading';
   element('update-progress-bar').style.width = `${Math.max(4, Math.min(100, update.progress || 0))}%`;
   button.hidden = phase === 'downloading' || phase === 'checking';

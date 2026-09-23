@@ -85,3 +85,13 @@ test('runtime update source matches the publish config and main never reads the 
   assert.doesNotMatch(main, /manifest\.build|package\.json'\)\.build/);
   assert.match(main, /try \{\s*updater = createUpdater/);
 });
+
+test('a release that is not there yet is explained plainly, not as a failure', async () => {
+  const fake = new EventEmitter();
+  fake.checkForUpdates = async () => { throw new Error('Cannot find latest.yml in the latest release artifacts (https://github.com/x/y/releases/download/v1/latest.yml): HttpError: 404'); };
+  const updater = createUpdater({ app: app(true, '1.0.0'), repository, env: {}, loadAutoUpdater: () => fake, now: () => 1234 });
+  const state = await updater.check();
+  assert.equal(state.phase, 'error');
+  assert.equal(state.message, '아직 받을 수 있는 새 버전이 없어요.');
+  assert.equal(state.checkedAt, 1234);
+});
