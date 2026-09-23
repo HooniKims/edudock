@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
-const { createUpdater, isNewer } = require('../src/updater.cjs');
+const { createUpdater, isNewer, RELEASE_REPOSITORY } = require('../src/updater.cjs');
 
 const repository = { owner: 'someone', repo: 'edudock' };
 const app = (packaged = true, version = '1.0.0') => ({ isPackaged: packaged, getVersion: () => version });
@@ -73,4 +73,15 @@ test('release config publishes both exe targets to GitHub', () => {
   assert.equal(manifest.build.publish.provider, 'github');
   assert.deepEqual(manifest.build.win.target.map(item => item.target), ['nsis', 'portable']);
   assert.ok(manifest.dependencies['electron-updater']);
+});
+
+test('runtime update source matches the publish config and main never reads the build section', () => {
+  const fs = require('node:fs');
+  const manifest = require('../package.json');
+  assert.equal(RELEASE_REPOSITORY.owner, manifest.build.publish.owner);
+  assert.equal(RELEASE_REPOSITORY.repo, manifest.build.publish.repo);
+  // electron-builder strips "build" from the packaged package.json.
+  const main = fs.readFileSync('src/main.cjs', 'utf8');
+  assert.doesNotMatch(main, /manifest\.build|package\.json'\)\.build/);
+  assert.match(main, /try \{\s*updater = createUpdater/);
 });

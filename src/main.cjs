@@ -14,8 +14,7 @@ const { generateDraft } = require('./drafts.cjs');
 const { PortalAutomation } = require('./portal.cjs');
 const { NativeOrdinaryEdgeBridge, OrdinaryEdgeAdapter, resolveOrdinaryEdgeHelper, resolveOrdinaryEdgeServeHelper, resolveDraftHandoffHelper } = require('./ordinary-edge.cjs');
 const { DraftHandoffCoordinator, NativeDraftHandoffBridge } = require('./draft-handoff.cjs');
-const { createUpdater } = require('./updater.cjs');
-const manifest = require('../package.json');
+const { createUpdater, RELEASE_REPOSITORY } = require('./updater.cjs');
 
 let notch;
 let auxiliary;
@@ -554,9 +553,9 @@ app.whenReady().then(() => {
     fs.writeFileSync(file.filePath, '\uFEFF' + draft.title + '\r\n\r\n' + draft.body.replace(/\r?\n/g, '\r\n'), 'utf8');
     return { ok: true, message: '초안을 파일로 저장했습니다.' };
   });
-  handle('update-check', ['auxiliary'], () => updater.check());
+  handle('update-check', ['auxiliary'], () => updater?.check() ?? null);
   handle('update-install', ['auxiliary'], () => installUpdate());
-  handle('update-open-page', ['auxiliary'], () => updater.openReleasePage());
+  handle('update-open-page', ['auxiliary'], () => updater?.openReleasePage());
   handle('diagnostics', ['auxiliary'], () => {
     const { browserConnected, ...checks } = automation.diagnostics();
     return {
@@ -567,15 +566,21 @@ app.whenReady().then(() => {
       lastStatus: currentStatus ? { label: currentStatus.label, message: currentStatus.message } : null,
     };
   });
-  updater = createUpdater({
-    app,
-    shell,
-    net,
-    repository: manifest.build.publish,
-    loadAutoUpdater: () => require('electron-updater').autoUpdater,
-    onChange: update => { announceUpdate(update); publish(); },
-  });
-  updater.start();
+  // Updates are optional: whatever goes wrong here must not stop the rest of startup.
+  try {
+    updater = createUpdater({
+      app,
+      shell,
+      net,
+      repository: RELEASE_REPOSITORY,
+      loadAutoUpdater: () => require('electron-updater').autoUpdater,
+      onChange: update => { announceUpdate(update); publish(); },
+    });
+    updater.start();
+  } catch (error) {
+    updater = null;
+    console.error('updater unavailable', error);
+  }
   publish();
   if (settings.autoLogin) automation.startAutoLogin().catch(error => automation.status('error', error instanceof Error ? error.message : '자동 로그인을 시작하지 못했습니다.', false));
 });

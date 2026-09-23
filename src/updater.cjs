@@ -11,6 +11,11 @@
 // Nothing here ever installs while a login or 기안 operation is running; restart is always a
 // deliberate press.
 
+// Where releases are published. It lives here, not only in package.json, because electron-builder
+// strips the "build" section from the packaged package.json — reading it at runtime returned
+// nothing in the installed app. A test keeps the two in sync.
+const RELEASE_REPOSITORY = Object.freeze({ owner: 'HooniKims', repo: 'edudock' });
+
 const CHECK_DELAY_MS = 15 * 1000;
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
@@ -118,4 +123,4 @@ function createUpdater({ app, shell, net, repository, env = process.env, loadAut
   return { start, stop, check, install, openReleasePage, get state() { return snapshot(); } };
 }
 
-module.exports = { createUpdater, isNewer, parseVersion };
+module.exports = { createUpdater, isNewer, parseVersion, RELEASE_REPOSITORY };
