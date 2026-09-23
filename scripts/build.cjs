@@ -17,6 +17,18 @@ const version = manifest.version;
 const staging = path.resolve('release', `build-${Date.now()}`);
 const target = path.resolve('release', version);
 
+// Antivirus scanning a freshly written exe can hold it for a moment; overwriting it then fails
+// with EBUSY/EPERM, so the copy is retried briefly instead of failing the whole release.
+function copyWithRetry(source, destination) {
+  for (let attempt = 1; ; attempt += 1) {
+    try { fs.copyFileSync(source, destination); return; }
+    catch (error) {
+      if (attempt >= 10 || !['EBUSY', 'EPERM', 'EACCES'].includes(error.code)) throw error;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
+    }
+  }
+}
+
 function sha256(file) {
   return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 }
@@ -37,12 +49,12 @@ function sha256(file) {
   for (const name of files) {
     const source = path.join(staging, name);
     if (!fs.existsSync(source)) throw new Error(`빌드 결과에 ${name}이(가) 없습니다.`);
-    fs.copyFileSync(source, path.join(target, name));
+    copyWithRetry(source, path.join(target, name));
   }
   const sums = files.filter(name => name.endsWith('.exe')).map(name => `${sha256(path.join(target, name))}  ${name}`).join('\n') + '\n';
   fs.writeFileSync(path.join(target, 'SHA256SUMS.txt'), sums);
   // Kept for scripts that still look for the installer at the release root.
-  fs.copyFileSync(path.join(target, files[0]), path.resolve('release', files[0]));
+  copyWithRetry(path.join(target, files[0]), path.resolve('release', files[0]));
   try { fs.rmSync(staging, { recursive: true, force: true }); } catch {}
   console.log(`Release files: ${target}`);
   process.stdout.write(sums);
