@@ -4,17 +4,20 @@
 // GitHub release needs: latest.yml + blockmap for the installed copy's auto-update, and
 // SHA256SUMS.txt so a teacher can check what they downloaded.
 //
-// Each build packages into a fresh staging folder so a running copy's locked app.asar never
-// collides with the new one.
+// Each build packages into a fresh staging folder so a locked app.asar from an earlier build
+// never collides with the new one.
 
 const builder = require('electron-builder');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const manifest = require('../package.json');
 
 const version = manifest.version;
-const staging = path.resolve('release', `build-${Date.now()}`);
+// Staging lives outside the project: editors and tools that watch the folder (Electron-based ones
+// open .asar files like directories) otherwise keep app.asar locked and the folder piles up.
+const staging = path.join(os.tmpdir(), `edudock-build-${Date.now()}`);
 const target = path.resolve('release', version);
 
 // Antivirus scanning a freshly written exe can hold it for a moment; overwriting it then fails
