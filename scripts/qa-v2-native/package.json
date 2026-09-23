@@ -1,0 +1,6 @@
+{
+  "name": "edudock-stage2-native-qa",
+  "version": "1.0.0",
+  "main": "../qa-v2-shape.cjs",
+  "private": true
+}

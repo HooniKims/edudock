@@ -1,0 +1,20 @@
+<!doctype html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'none'"><title>업무 상태</title><link rel="stylesheet" href="popup.css"><script src="popup.js" defer></script></head><body><main id="panel"><span id="tail" aria-hidden="true"></span><p id="label"></p>
+<section id="status" hidden><strong id="phase">대기 중</strong><p id="message">현재 진행 중인 작업이 없습니다.</p><button id="cancel" hidden>작업 취소</button><button id="retry" hidden>다시 시도</button></section>
+<section id="guide" hidden>
+  <p id="guide-body"></p>
+  <form id="guide-password" hidden autocomplete="off">
+    <label class="pw-field">비밀번호
+      <span class="pw-row"><input id="pw-first" type="password" autocomplete="new-password" maxlength="256" spellcheck="false"><button type="button" class="pw-eye" data-for="pw-first" aria-label="비밀번호 보기" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span>
+    </label>
+    <label class="pw-field">한 번 더 입력
+      <span class="pw-row"><input id="pw-second" type="password" autocomplete="new-password" maxlength="256" spellcheck="false"><button type="button" class="pw-eye" data-for="pw-second" aria-label="비밀번호 보기" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span>
+    </label>
+    <p id="pw-hint" class="pw-hint" role="status" aria-live="polite"></p>
+  </form>
+  <div class="guide-actions">
+    <span id="guide-progress" class="guide-progress"></span>
+    <button type="button" id="guide-skip" class="ghost">건너뛰기</button>
+    <button type="button" id="guide-next" class="primary">다음</button>
+  </div>
+</section>
+</main></body></html>

@@ -1,0 +1,43 @@
+@font-face{font-family:Paperlogy;src:url('../assets/fonts/Paperlogy-4Regular.ttf') format('truetype');font-weight:400;font-display:swap}@font-face{font-family:Paperlogy;src:url('../assets/fonts/Paperlogy-6SemiBold.ttf') format('truetype');font-weight:600;font-display:swap}*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent;color:#f5f5f7;font:400 12px Paperlogy,'Malgun Gothic',sans-serif}body{padding:4px}#panel{position:relative;width:100%;height:100%;padding:13px 16px;border-radius:16px;background:#000;box-shadow:0 8px 24px rgba(0,0,0,.24)}#label{margin:0;font-weight:600;line-height:18px}#status strong{display:block;color:#76acff;margin-bottom:6px}#status p{margin:0;color:#b0b0b8;line-height:1.5}#cancel{margin-top:12px;border:1px solid #36363d;border-radius:9px;background:#17171a;color:#f5f5f7;padding:7px 11px;font:600 12px inherit}#cancel:focus-visible{outline:2px solid #76acff;outline-offset:2px}body[data-kind="status"] #label{display:none}body[data-edge="right"] #tail{position:absolute;right:-7px;top:calc(50% - 8px);width:16px;height:16px;background:#000;transform:rotate(45deg)}body[data-edge="left"] #tail{position:absolute;left:-7px;top:calc(50% - 8px);width:16px;height:16px;background:#000;transform:rotate(45deg)}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+#status p{overflow-wrap:anywhere;max-height:76px;overflow:auto}
+#panel{animation:popup-in 500ms cubic-bezier(.22,.7,.25,1)}
+@keyframes popup-in{from{opacity:0;transform:translateX(8px) scale(.97)}to{opacity:1;transform:none}}
+body[data-edge="top"] #tail{position:absolute;top:-7px;left:calc(50% - 8px);width:16px;height:16px;background:#000;transform:rotate(45deg)}
+body[data-edge="bottom"] #tail{position:absolute;bottom:-7px;left:calc(50% - 8px);width:16px;height:16px;background:#000;transform:rotate(45deg)}
+body[data-kind="guide"] #panel{display:flex;flex-direction:column;gap:10px;overflow:hidden}
+body[data-kind="guide"] #label{color:#76acff;font-size:13px}
+#guide{display:flex;flex-direction:column;gap:10px;flex:1;min-height:0}
+#guide-body{margin:0;color:#c8c8d0;line-height:1.55;overflow-wrap:anywhere}
+#guide-password{display:flex;flex-direction:column;gap:8px}
+.pw-field{display:flex;flex-direction:column;gap:4px;color:#b0b0b8;font-size:11px}
+.pw-row{display:flex;align-items:center;gap:6px;border:1px solid #36363d;border-radius:9px;background:#17171a;padding:0 6px 0 9px}
+.pw-row:focus-within{border-color:#76acff}
+.pw-row input{flex:1;min-width:0;border:0;background:transparent;color:#f5f5f7;font:400 12px inherit;padding:8px 0;letter-spacing:.08em}
+.pw-row input:focus{outline:none}
+.pw-eye{display:grid;place-items:center;width:26px;height:26px;border:0;border-radius:7px;background:transparent;color:#8d8d97;cursor:pointer}
+.pw-eye:hover{background:#26262b;color:#f5f5f7}
+.pw-eye[aria-pressed="true"]{color:#76acff}
+.pw-eye svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.pw-eye:focus-visible{outline:2px solid #76acff;outline-offset:1px}
+.pw-hint{margin:0;min-height:15px;font-size:11px;color:#8d8d97}
+.pw-hint[data-tone="warn"]{color:#ffb4a2}
+.pw-hint[data-tone="ok"]{color:#8fd694}
+.guide-actions{display:flex;align-items:center;gap:8px;margin-top:auto}
+.guide-progress{margin-right:auto;color:#6f6f78;font-size:11px;font-variant-numeric:tabular-nums}
+.guide-actions button{border-radius:9px;padding:7px 12px;font:600 12px inherit;cursor:pointer}
+.guide-actions .ghost{border:1px solid #36363d;background:transparent;color:#b0b0b8}
+.guide-actions .ghost:hover{background:#17171a;color:#f5f5f7}
+.guide-actions .primary{border:1px solid #2f6fd0;background:#2f6fd0;color:#fff}
+.guide-actions .primary:hover{background:#3a7de0}
+.guide-actions .primary:disabled{opacity:.45;cursor:default}
+.guide-actions button:focus-visible{outline:2px solid #76acff;outline-offset:2px}
+/* display:flex above would otherwise defeat the hidden attribute. */
+[hidden]{display:none!important}
+/* Legibility: the guide is read once and must be easy on the eyes at a glance. */
+body[data-kind="guide"] #label{font-size:14px;color:#8fc0ff;letter-spacing:-.01em}
+body[data-kind="guide"] #guide-body{font-size:13px;color:#e8e8ee;line-height:1.65}
+body[data-kind="guide"] .pw-field{font-size:12px;color:#c8c8d0}
+body[data-kind="guide"] .pw-row input{font-size:13px}
+body[data-kind="guide"] .pw-hint{font-size:12px}
+body[data-kind="guide"] .guide-progress{color:#9a9aa4;font-size:12px}
+body[data-kind="guide"] .guide-actions button{font-size:13px;padding:8px 14px}

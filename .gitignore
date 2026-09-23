@@ -1,0 +1,29 @@
+# Dependencies and build output
+node_modules/
+release/
+dist/
+
+# Secrets — never commit
+.env*
+*.pem
+*.pfx
+certificate-password.bin
+
+# QA browser profiles, reports and caches (contain cookies / screenshots of real accounts)
+.qa-*/
+artifacts/
+.omo/
+.codegraph/
+*.log
+
+# Local working notes and source material that are not part of the product
+handoff.md
+WORKING.md
+WORKLOG.md
+k-edufine-drafting.zip
+
+# OS / editor
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

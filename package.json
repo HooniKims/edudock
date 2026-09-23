@@ -1,0 +1,86 @@
+{
+  "name": "edudock",
+  "version": "0.10.0",
+  "description": "서울교육 업무포털과 나이스를 위한 데스크톱 위젯",
+  "main": "src/main.cjs",
+  "author": "EduDock",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/*.test.cjs",
+    "qa": "node scripts/qa.cjs",
+    "build": "node scripts/build.cjs",
+    "release": "node scripts/release.cjs"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9",
+    "playwright-core": "^1.58.0"
+  },
+  "devDependencies": {
+    "electron": "^41.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "kr.local.edudock",
+    "productName": "EduDock",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "src/**/*",
+      "!src/credentials.cjs",
+      "renderer/**/*",
+      "assets/**/*",
+      "package.json",
+      "!renderer/qa-*.png"
+    ],
+    "asarUnpack": [
+      "node_modules/playwright-core/**/*",
+      "src/native/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/app-icon.ico",
+      "signExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "업무포털 도우미",
+      "artifactName": "EduDock-Setup-${version}.${ext}"
+    },
+    "electronDist": "node_modules/electron/dist",
+    "portable": {
+      "artifactName": "EduDock-Portable-${version}.${ext}"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "HooniKims",
+      "repo": "edudock",
+      "releaseType": "release"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HooniKims/edudock.git"
+  },
+  "homepage": "https://github.com/HooniKims/edudock#readme",
+  "bugs": {
+    "url": "https://github.com/HooniKims/edudock/issues"
+  }
+}

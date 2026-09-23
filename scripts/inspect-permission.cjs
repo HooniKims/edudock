@@ -1,0 +1,2 @@
+const {PortalAutomation}=require('../src/portal.cjs');const path=require('node:path');
+(async()=>{const a=new PortalAutomation({profile:path.resolve('.qa-permission-inspect'),settings:()=>({autoLogin:true}),status:e=>console.log(e.phase,e.message)});const result=await a.openMenu('portal');console.log(result);console.log('Browser API:',Boolean(a.context.browser()));await a.context.pages().at(-1).screenshot({path:'artifacts/qa/permission-block.png'});await new Promise(r=>a.context.on('close',r));})();

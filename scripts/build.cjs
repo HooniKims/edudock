@@ -1,0 +1,49 @@
+'use strict';
+
+// Builds the installer and the portable exe into release/<version>/ together with everything a
+// GitHub release needs: latest.yml + blockmap for the installed copy's auto-update, and
+// SHA256SUMS.txt so a teacher can check what they downloaded.
+//
+// Each build packages into a fresh staging folder so a running copy's locked app.asar never
+// collides with the new one.
+
+const builder = require('electron-builder');
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
+const manifest = require('../package.json');
+
+const version = manifest.version;
+const staging = path.resolve('release', `build-${Date.now()}`);
+const target = path.resolve('release', version);
+
+function sha256(file) {
+  return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+}
+
+(async () => {
+  await builder.build({
+    targets: builder.Platform.WINDOWS.createTarget(['nsis', 'portable'], builder.Arch.x64),
+    publish: 'never',
+    config: { directories: { output: staging }, electronDist: path.resolve('node_modules/electron/dist') },
+  });
+  const files = [
+    `EduDock-Setup-${version}.exe`,
+    `EduDock-Setup-${version}.exe.blockmap`,
+    `EduDock-Portable-${version}.exe`,
+    'latest.yml',
+  ];
+  fs.mkdirSync(target, { recursive: true });
+  for (const name of files) {
+    const source = path.join(staging, name);
+    if (!fs.existsSync(source)) throw new Error(`빌드 결과에 ${name}이(가) 없습니다.`);
+    fs.copyFileSync(source, path.join(target, name));
+  }
+  const sums = files.filter(name => name.endsWith('.exe')).map(name => `${sha256(path.join(target, name))}  ${name}`).join('\n') + '\n';
+  fs.writeFileSync(path.join(target, 'SHA256SUMS.txt'), sums);
+  // Kept for scripts that still look for the installer at the release root.
+  fs.copyFileSync(path.join(target, files[0]), path.resolve('release', files[0]));
+  try { fs.rmSync(staging, { recursive: true, force: true }); } catch {}
+  console.log(`Release files: ${target}`);
+  process.stdout.write(sums);
+})().catch(error => { console.error(error); process.exitCode = 1; });

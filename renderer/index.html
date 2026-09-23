@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'none'">
+  <meta name="description" content="나이스와 업무포털을 여는 바탕화면 업무 도우미">
+  <title>업무 곁 · 업무포털 도우미</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="renderer.js" defer></script>
+</head>
+<body data-orientation="vertical">
+  <svg class="svg-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></symbol>
+    <symbol id="i-school" viewBox="0 0 24 24"><path d="m3 9 9-6 9 6M5 10v10h14V10M9 20v-6h6v6M3 21h18"/><path d="M11 8h2"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4m10-4v4M3 10h18m-13 5 3 3 5-5"/></symbol>
+    <symbol id="i-trip" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="14" rx="3"/><path d="M8 7V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v3M3 12a23 23 0 0 0 18 0m-11 1v3h4v-3"/></symbol>
+    <symbol id="i-document" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zm0 0v6h6M8 13h8m-8 4h5"/></symbol>
+    <symbol id="i-pen" viewBox="0 0 24 24"><path d="m15 4 5 5M4 20l5-1L21 7a2.1 2.1 0 0 0-5-5L4 14zM4 14l5 5M3 22h18"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="m9 3-1 3-3 1-2 4 2 2v4l4 3 3-1 3 1 4-3v-4l2-2-2-4-3-1-1-3z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M3 10a9 9 0 0 1 15-6l3 3M21 2v5h-5M21 14a9 9 0 0 1-15 6l-3-3M3 22v-5h5"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="m8 3 8 0-1 7 4 4v2H5v-2l4-4zM12 16v6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5m6-6-6 6 6 6"/></symbol>
+    <symbol id="i-dock" viewBox="0 0 24 24"><path d="M4 4h16v16H4zM14 4v10h6"/></symbol>
+    <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8m-4-4v4"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h10m4 0h2M4 17h4m4 0h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+  </defs></svg>
+  <div class="widget">
+    <header class="titlebar">
+      <div class="brand"><span class="brand-mark"><svg><use href="#i-grid"/></svg></span><span>업무 <b>곁</b><small>DESKTOP ASSISTANT</small></span></div>
+      <div class="window-tools">
+        <button class="icon-button" data-window="rotate" title="가로·세로 전환" aria-label="가로·세로 전환"><svg><use href="#i-rotate"/></svg></button>
+        <button class="icon-button pin-button" data-window="pin" title="항상 위에 표시" aria-label="항상 위에 표시" aria-pressed="false"><svg><use href="#i-pin"/></svg></button>
+        <button class="icon-button" data-window="minimize" title="최소화" aria-label="최소화"><svg><use href="#i-minus"/></svg></button>
+        <button class="icon-button close-button" data-window="close" title="닫기" aria-label="닫기"><svg><use href="#i-close"/></svg></button>
+      </div>
+    </header>
+    <main class="content" id="main">
+      <section class="view home-view" id="home-view" aria-label="업무 바로가기">
+        <div class="greeting"><div><p class="eyebrow" id="today">오늘의 업무</p><h1>필요한 업무를,<br> <span>바로 곁에서.</span></h1></div><span class="edge-badge">Edge 연결</span></div>
+        <div class="section-label"><span>자주 쓰는 업무</span><span class="tiny-label">ONE CLICK</span></div>
+        <nav class="launcher-grid" aria-label="업무 메뉴">
+          <button class="launcher blue" data-menu="portal"><span class="app-icon"><svg><use href="#i-grid"/></svg></span><span class="app-title">업무포털</span><span class="app-description">통합 업무 시작</span></button>
+          <button class="launcher violet" data-menu="neis"><span class="app-icon"><svg><use href="#i-school"/></svg></span><span class="app-title">나이스</span><span class="app-description">인사·복무 관리</span></button>
+          <button class="launcher blue" data-menu="attendance"><span class="app-icon"><svg><use href="#i-calendar"/></svg></span><span class="app-title">개인근무상황</span><span class="app-description">휴가·외출 신청</span></button>
+          <button class="launcher mint" data-menu="trip"><span class="app-icon"><svg><use href="#i-trip"/></svg></span><span class="app-title">출장 신청</span><span class="app-description">일정과 여비</span></button>
+          <button class="launcher mint" data-menu="edufine"><span class="app-icon"><svg><use href="#i-document"/></svg></span><span class="app-title">K-에듀파인</span><span class="app-description">문서·결재 업무</span></button>
+          <button class="launcher violet" data-view="draft"><span class="app-icon"><svg><use href="#i-pen"/></svg></span><span class="app-title">초안 만들기</span><span class="app-description">기안·출장·복무</span></button>
+        </nav>
+        <button class="draft-prompt" data-view="draft"><span class="prompt-icon"><svg><use href="#i-pen"/></svg></span><span><strong>빈 문서부터 시작하지 마세요</strong><small>필요한 내용만 적고 초안을 받아보세요.</small></span><svg class="trailing"><use href="#i-arrow"/></svg></button>
+      </section>
+      <section class="view" id="draft-view" hidden aria-labelledby="draft-heading">
+        <div class="view-heading"><button class="icon-button" data-view="home" aria-label="바로가기로 돌아가기"><svg><use href="#i-back"/></svg></button><div><h1 id="draft-heading">초안 만들기</h1><p>필요한 내용을 담아 문장을 정리해요.</p></div></div>
+        <div class="draft-layout"><form id="draft-form">
+          <div class="segments" aria-label="초안 종류"><button type="button" data-kind="official" aria-pressed="true">일반기안</button><button type="button" data-kind="trip" aria-pressed="false">출장</button><button type="button" data-kind="attendance" aria-pressed="false">근무상황</button></div>
+          <input type="hidden" name="kind" value="official">
+          <label class="field">제목<input name="title" required maxlength="200" placeholder="예: 2학기 학년 협의회 운영 계획"></label>
+          <label class="field">목적·주요 내용<textarea name="purpose" required rows="3" maxlength="6000" placeholder="누가, 무엇을, 왜 하는지 적어주세요."></textarea></label>
+          <label class="field" data-kinds="official">관련 근거<input name="basis" placeholder="문서 번호 또는 계획명"></label>
+          <div class="field-row"><label class="field">날짜<input name="date" type="date"></label><label class="field" data-kinds="official trip">장소<input name="place" placeholder="장소 입력"></label><label class="field" data-kinds="attendance" hidden>복무 종류<select name="leaveType"><option>연가</option><option>병가</option><option>공가</option><option>특별휴가</option><option>외출</option><option>조퇴</option></select></label></div>
+          <div class="field-row" data-kinds="trip attendance" hidden><label class="field">시작 시간<input name="startTime" type="time"></label><label class="field">종료 시간<input name="endTime" type="time"></label></div>
+          <label class="field" data-kinds="official">대상<input name="audience" placeholder="예: 3학년 담임교사"></label>
+          <label class="field" data-kinds="official">붙임 <span class="optional">선택</span><textarea name="attachments" rows="2" placeholder="붙임 이름을 한 줄에 하나씩 입력"></textarea></label>
+          <button class="primary full" id="generate-button" type="submit"><svg><use href="#i-pen"/></svg>초안 생성</button>
+        </form><div class="draft-result" id="draft-result"><div class="empty-state" id="draft-empty"><span class="empty-symbol"><svg><use href="#i-document"/></svg></span><h2>첫 문장을 함께 시작해요</h2><p>내용을 입력하고 초안을 생성하면<br>여기에서 바로 다듬을 수 있어요.</p></div><div id="draft-output" hidden><label class="field">문서 제목<input id="result-title" maxlength="200"></label><label class="field">초안 내용<textarea id="result-body" rows="14" spellcheck="false"></textarea></label><div class="notice" id="draft-warnings" hidden></div><p class="helper">내용과 근거를 확인한 뒤 결재 문서에 사용하세요.</p><div class="button-row"><button class="secondary" id="copy-draft"><svg><use href="#i-copy"/></svg>복사</button><button class="secondary" id="save-draft"><svg><use href="#i-save"/></svg>파일 저장</button></div><button class="secondary" id="fill-draft" hidden><svg><use href="#i-document"/></svg>기안문에 넣기</button><button class="text-button" id="open-draft-menu">해당 업무 화면 열기 <svg><use href="#i-arrow"/></svg></button></div></div></div>
+      </section>
+      <section class="view" id="settings-view" hidden aria-labelledby="settings-heading">
+        <div class="view-heading"><button class="icon-button" data-view="home" aria-label="바로가기로 돌아가기"><svg><use href="#i-back"/></svg></button><div><h1 id="settings-heading">내 업무 환경</h1><p>로그인과 위젯을 설정해요.</p></div></div>
+        <section class="settings-card" aria-labelledby="card-login"><h2 class="card-title" id="card-login"><span class="card-icon"><svg><use href="#i-lock"/></svg></span>공식 로그인</h2><div class="credential-box"><svg><use href="#i-lock"/></svg><div><strong id="login-status-label">Edge에서 안전하게 로그인</strong><p>업무 버튼을 누르면 일반 Edge에서 업무포털을 엽니다. 인증서 선택과 암호 입력은 공식 창에서 직접 진행하세요.</p></div></div><div class="setting-row" id="saved-password-row" hidden><span><strong><span class="step-badge done">1</span>저장된 비밀번호</strong><small>이 컴퓨터에 안전하게 보관 중이에요. 지우면 자동 로그인도 꺼지고, 인증서 창에서 직접 입력합니다.</small></span><button class="secondary small" id="clear-password">삭제</button></div><form class="password-setup" id="password-setup" hidden autocomplete="off"><span><strong><span class="step-badge">1</span>인증서 비밀번호 저장</strong><small>저장하면 자동 로그인이 함께 켜지고, 로그인할 때 인증서 비밀번호를 대신 입력해요. 이 컴퓨터의 지금 Windows 계정에서만 풀 수 있게 암호화해 보관합니다.</small></span><label class="pw-field">비밀번호<span class="pw-row"><input id="setup-pw-first" type="password" autocomplete="new-password" maxlength="256" spellcheck="false"><button type="button" class="pw-eye" data-for="setup-pw-first" aria-label="비밀번호 보기" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label><label class="pw-field">한 번 더 입력<span class="pw-row"><input id="setup-pw-second" type="password" autocomplete="new-password" maxlength="256" spellcheck="false"><button type="button" class="pw-eye" data-for="setup-pw-second" aria-label="비밀번호 보기" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></span></label><p class="pw-hint" id="setup-pw-hint" aria-live="polite"></p><button class="primary full" id="save-password" type="submit" disabled>비밀번호 저장</button></form><p class="helper" id="password-unavailable" hidden>이 컴퓨터에서는 비밀번호를 안전하게 암호화할 수 없어 저장 기능을 쓸 수 없어요. 인증서 창에서 직접 입력해주세요.</p><label class="setting-row" id="auto-login-row"><span><strong><span class="step-badge">2</span>시작할 때 자동 로그인</strong><small id="auto-login-help">먼저 위에서 인증서 비밀번호를 저장하면 켤 수 있어요.</small></span><input id="auto-login" class="switch" type="checkbox" aria-describedby="auto-login-help"></label></section>
+        <section class="settings-card" aria-labelledby="card-place"><h2 class="card-title" id="card-place"><span class="card-icon"><svg><use href="#i-monitor"/></svg></span>위젯 위치</h2><p class="card-help">아래 그림에서 위젯을 붙일 모니터의 가장자리를 누르세요.</p><div class="monitor-map" id="monitor-map" role="group" aria-label="모니터와 가장자리 선택"></div><p class="map-caption" id="placement-caption" aria-live="polite"></p><ul class="tips"><li><b>끌어서 옮기기</b> 위젯 바깥쪽의 점선 손잡이를 끌면 다른 모니터로도 옮길 수 있어요. 끄는 동안 붙을 자리가 파랗게 표시됩니다.</li><li><b>오른쪽 클릭</b> 위젯을 오른쪽 클릭하면 위치 메뉴가 바로 열려요.</li></ul></section><section class="settings-card" aria-labelledby="card-look"><h2 class="card-title" id="card-look"><span class="card-icon"><svg><use href="#i-sliders"/></svg></span>위젯 모양</h2><label class="setting-row"><span><strong>항상 위에 표시</strong><small>다른 창 위에서도 바로 누를 수 있어요.</small></span><input id="always-on-top" class="switch" type="checkbox"></label><div class="setting-row"><span><strong>표시 방식</strong><small>마우스를 가까이 대면 펼치거나 항상 펼쳐 둡니다.</small></span><div class="segments compact"><button data-display-mode="auto" aria-pressed="true">자동</button><button data-display-mode="expanded" aria-pressed="false">항상 펼치기</button></div></div><label class="setting-row" for="placement-scale"><span><strong>크기</strong><small id="placement-scale-help">아이콘이 잘리지 않는 범위에서 조절해요.</small></span><span class="range-control"><input id="placement-scale" type="range" min="85" max="150" step="5" aria-describedby="placement-scale-help placement-scale-value"><output id="placement-scale-value" for="placement-scale">100%</output></span></label><label class="setting-row" for="opacity"><span><strong>투명도</strong><small>화면을 가리지 않게 옅게 만들 수 있어요.</small></span><span class="range-control"><input id="opacity" type="range" min="30" max="100" step="5" value="100"><output id="opacity-value">100%</output></span></label></section><section class="settings-card" aria-labelledby="card-help"><h2 class="card-title" id="card-help"><span class="card-icon"><svg><use href="#i-help"/></svg></span>도움말</h2><div class="setting-row update-row" id="update-row"><span><strong>업데이트</strong><small id="update-message">현재 버전을 확인하고 있어요.</small><span class="update-progress" id="update-progress" hidden><span id="update-progress-bar"></span></span></span><button class="secondary small" id="update-action" type="button">확인</button></div><button class="link-row" id="guide-replay"><span><strong>사용 안내 다시 보기</strong><small>버튼마다 무엇을 하는지 차례로 보여줘요.</small></span><svg><use href="#i-arrow"/></svg></button><button class="link-row" id="diagnostics-button"><span><strong>연결 상태 확인</strong><small>Edge, 인증서 프로그램, 저장된 비밀번호를 점검해요.</small></span><svg><use href="#i-arrow"/></svg></button><ul class="diagnostics" id="diagnostics-output" hidden></ul></section><p class="version" id="version"></p>
+      </section>
+      <section class="view" id="showcase-view" hidden aria-label="디자인 구성 요소"><h1>구성 요소</h1><p>버튼 · 상태 · 입력</p><div class="button-row"><button class="primary">실행</button><button class="secondary">취소</button><button class="secondary" disabled>진행 중</button></div><label class="field">입력 필드<input placeholder="내용을 입력하세요"></label><div class="notice">문서에 필요한 내용을 확인해주세요.</div><label class="setting-row"><span>선택 상태</span><input class="switch" type="checkbox" checked></label></section>
+    </main>
+    <footer class="footer"><div class="connection" role="status" aria-live="polite"><span class="status-dot"></span><span id="status-message">업무를 선택하면 Edge에서 열어요.</span></div><div class="footer-controls"><button class="secondary small" id="cancel-auth" hidden>취소</button><button class="secondary small" id="retry-auth" hidden>다시 시도</button><button class="footer-button" data-view="settings"><svg><use href="#i-settings"/></svg>설정</button><button class="icon-button" data-window="dock" aria-label="다음 가장자리로 이동" title="다음 가장자리로 이동"><svg><use href="#i-dock"/></svg></button></div></footer>
+    <button class="resize-handle" aria-label="위젯 크기 조절" title="끌어서 크기 조절"></button>
+  </div>
+</body>
+</html>
