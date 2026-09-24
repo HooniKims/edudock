@@ -3,8 +3,8 @@
   "version": "0.10.1",
   "description": "서울교육 업무포털과 나이스를 위한 데스크톱 위젯",
   "main": "src/main.cjs",
-  "author": "EduDock",
-  "license": "UNLICENSED",
+  "author": "HooniKims",
+  "license": "MIT",
   "scripts": {
     "start": "electron .",
     "test": "node --test tests/*.test.cjs",

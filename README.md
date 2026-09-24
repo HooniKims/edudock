@@ -3,6 +3,8 @@
 화면 가장자리에 붙어 있는 작은 위젯에서 **나이스**와 **K-에듀파인**을 바로 여는 Windows용 업무 도우미입니다.
 평소 쓰는 Microsoft Edge에서 서울교육 업무포털 로그인부터 원하는 업무 화면까지 이동합니다.
 
+> 개인이 만든 **비공식 도구**이며 교육부·서울특별시교육청과 관련이 없습니다. 나이스·K-에듀파인은 각 기관의 서비스 이름입니다.
+
 ## 내려받기
 
 [최신 릴리즈](../../releases/latest)에서 둘 중 하나를 받으세요.
@@ -59,4 +61,11 @@ npm run release   # 테스트 → 빌드 → GitHub 릴리즈 게시 (gh 로그�
 
 릴리즈 절차는 [RELEASING.md](RELEASING.md)를 보세요.
 
-Paperlogy 글꼴은 SIL Open Font License를 따릅니다(`assets/fonts/OFL.txt`).
+## 라이선스
+
+[MIT](LICENSE) © 2026 HooniKims — 저작권 표시만 남기면 자유롭게 쓰고 고치고 나눌 수 있습니다. 프로그램은 있는 그대로 제공되며, 사용에 따른 결과는 보증하지 않습니다.
+
+함께 들어 있는 글꼴과 참고 자료는 각자의 라이선스를 따릅니다.
+
+- Paperlogy 글꼴 — SIL Open Font License 1.1 (`assets/fonts/OFL.txt`)
+- CodeNotch 디자인 참고 — MIT (`assets/licenses/CodeNotch-MIT.txt`)
