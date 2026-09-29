@@ -58,3 +58,10 @@ test('the 초안 window sizes itself to show the whole form and draft without sc
   assert.match(main, /handle\('fit-window', \['auxiliary'\]/);
   assert.match(main, /Math\.min\(area\.height, request\.height\)/, 'never taller than the screen');
 });
+
+test('the native helpers are started in the background shortly after launch, read-only', () => {
+  const fs = require('node:fs');
+  const main = fs.readFileSync('src/main.cjs', 'utf8');
+  assert.match(main, /\[\[ordinaryEdgeBridge, \{ command: 'inspect' \}\], \[draftHandoffBridge, \{ command: 'inspect-editors' \}\]\]/);
+  assert.match(main, /bridge\.run\(request, \{ cancelled: false \}\)\)\.catch\(\(\) => \{\}\)/, 'a failed warm-up never surfaces');
+});

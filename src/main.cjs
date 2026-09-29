@@ -675,6 +675,15 @@ app.whenReady().then(() => {
   // Nothing opens by itself at launch: logging in happens when a button is pressed. The widget
   // only points at itself so the teacher knows where to press.
   if (!shouldAutoStart(settings)) setTimeout(showLaunchHint, 1500);
+  // The native helpers (PowerShell + compiled UI Automation types) cost about two seconds to
+  // start, which used to land on the first button press. A read-only look at the Edge windows
+  // and the open 기안창 shortly after launch starts them in the background instead.
+  const prewarm = setTimeout(() => {
+    for (const [bridge, request] of [[ordinaryEdgeBridge, { command: 'inspect' }], [draftHandoffBridge, { command: 'inspect-editors' }]]) {
+      Promise.resolve().then(() => bridge.run(request, { cancelled: false })).catch(() => {});
+    }
+  }, 2500);
+  prewarm.unref?.();
 });
 
 app.on('before-quit', () => {
