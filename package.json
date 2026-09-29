@@ -8,7 +8,6 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test tests/*.test.cjs",
-    "qa": "node scripts/qa.cjs",
     "build": "node scripts/build.cjs",
     "release": "node scripts/release.cjs"
   },
