@@ -32,6 +32,7 @@ function placePopover(notch, anchor, size, workArea, edge) {
 function createNotchPopover({ BrowserWindow, screen, preload, onWindow, onPresence }) {
   let popup = null;
   let pending = null;
+  let current = null;
 
   function ensure() {
     if (popup && !popup.isDestroyed()) return popup;
@@ -55,7 +56,7 @@ function createNotchPopover({ BrowserWindow, screen, preload, onWindow, onPresen
     created.setAlwaysOnTop(true, 'floating');
     created.loadFile(path.join(__dirname, '../renderer/popup.html'));
     created.webContents.on('did-finish-load', () => { if (pending && popup === created && !created.isDestroyed()) created.webContents.send('popover-data', pending.data); });
-    created.on('hide', () => { if (popup === created) onPresence(false); });
+    created.on('hide', () => { if (popup === created) { current = null; onPresence(false); } });
     created.on('closed', () => { if (popup === created) { popup = null; onPresence(false); } });
     return created;
   }
@@ -77,10 +78,12 @@ function createNotchPopover({ BrowserWindow, screen, preload, onWindow, onPresen
 
   function show(request) {
     const target = ensure();
-    const kind = ['status', 'guide', 'update'].includes(request.kind) ? request.kind : 'tooltip';
+    const kind = ['status', 'guide', 'update', 'hint'].includes(request.kind) ? request.kind : 'tooltip';
+    current = kind;
     const size = kind === 'status' ? { width: 280, height: 176 }
       : kind === 'guide' ? (request.guide?.kind === 'password-offer' ? { width: 330, height: 372 } : { width: 330, height: 216 })
         : kind === 'update' ? { width: 330, height: 196 }
+        : kind === 'hint' ? { width: 340, height: 60 }
         : { width: 220, height: 52 };
     const workArea = screen.getDisplayMatching(request.notchBounds).workArea;
     const bounds = placePopover(request.notchBounds, request.anchor, size, workArea, request.edge);
@@ -97,7 +100,7 @@ function createNotchPopover({ BrowserWindow, screen, preload, onWindow, onPresen
 
   function hide() { if (popup && !popup.isDestroyed()) popup.hide(); }
   function destroy() { if (popup && !popup.isDestroyed()) popup.destroy(); popup = null; }
-  return { show, hide, destroy, get window() { return popup; } };
+  return { show, hide, destroy, get window() { return popup; }, get kind() { return current; } };
 }
 
 module.exports = { createNotchPopover, placePopover };

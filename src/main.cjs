@@ -89,7 +89,7 @@ function markPasswordSaved(saved) {
   // The in-flight login is left alone when the password is dropped: after a rejected password the
   // certificate window is still open and the teacher types it by hand.
   settings = sanitizedSettings({ ...settings, passwordSaved: saved, autoLogin: saved });
-  if (saved) { automation?.setAutoLogin(true); startBackgroundLogin(); }
+  if (saved) automation?.setAutoLogin(true);
   persist();
   publish();
 }
@@ -227,13 +227,6 @@ function hideNotch() {
   return { ok: true };
 }
 
-// Turning auto-login on (or saving the password) logs in right away in the background, so the
-// next button press finds the portal already signed in and goes straight to its screen.
-function startBackgroundLogin() {
-  if (!automation || automation.busy || settings.autoLogin !== true) return;
-  automation.startAutoLogin().catch(error => automation.status('error', error instanceof Error ? error.message : '자동 로그인을 시작하지 못했습니다.', false));
-}
-
 function applySettings(patch) {
   const cleaned = cleanPatch(patch);
   if (cleaned.autoLogin === true && settings.passwordSaved !== true) throw new Error('먼저 인증서 비밀번호를 저장해 주세요. 저장하면 자동 로그인이 켜집니다.');
@@ -251,7 +244,6 @@ function applySettings(patch) {
   persist();
   if (Object.hasOwn(cleaned, 'autoLogin')) {
     automation?.setAutoLogin(settings.autoLogin);
-    if (settings.autoLogin) startBackgroundLogin();
   }
   notch.apply(settings);
   publish();
@@ -319,6 +311,18 @@ function refreshTrayMenu() {
   if (key === trayMenuKey) return;
   trayMenuKey = key;
   tray.setContextMenu(buildTrayMenu());
+}
+
+// A small arrow bubble next to the widget at launch. It keeps the widget expanded while shown
+// (popover presence) and goes away by itself; any other popover simply replaces it.
+let launchHintTimer = null;
+function showLaunchHint() {
+  if (!notch?.window || notch.window.isDestroyed() || !notch.window.isVisible() || guide || updateQuestion) return;
+  const bounds = notch.window.getBounds();
+  popover.show({ kind: 'hint', label: '버튼을 누르시면 해당 메뉴로 바로 이동합니다.', anchor: bounds, notchBounds: bounds, edge: settings.placement.edge });
+  clearTimeout(launchHintTimer);
+  launchHintTimer = setTimeout(() => { if (popover.kind === 'hint') popover.hide(); }, 8000);
+  launchHintTimer.unref?.();
 }
 
 function installUpdate() {
@@ -647,7 +651,9 @@ app.whenReady().then(() => {
     console.error('updater unavailable', error);
   }
   publish();
-  startBackgroundLogin();
+  // Nothing opens by itself at launch: logging in happens when a button is pressed. The widget
+  // only points at itself so the teacher knows where to press.
+  if (!shouldAutoStart(settings)) setTimeout(showLaunchHint, 1500);
 });
 
 app.on('before-quit', () => {

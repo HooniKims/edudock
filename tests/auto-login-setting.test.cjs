@@ -117,9 +117,11 @@ test('a button pressed during the background login takes it over at once, withou
   assert.equal(events.some(event => event.phase === 'cancelled'), false);
 });
 
-test('the saved password is typed in only while auto-login is on, and turning it on logs in right away', () => {
+test('the saved password is typed in only while auto-login is on, and nothing logs in until a button is pressed', () => {
   const main = fs.readFileSync('src/main.cjs', 'utf8');
   assert.match(main, /getStoredPassword: \(\) => \(settings\.passwordSaved === true && settings\.autoLogin === true \?/);
-  assert.match(main, /if \(settings\.autoLogin\) startBackgroundLogin\(\);/);
-  assert.match(main, /if \(!automation \|\| automation\.busy \|\| settings\.autoLogin !== true\) return;/);
+  // Launching the app, switching auto-login on or saving the password opens nothing by itself.
+  assert.doesNotMatch(main, /startAutoLogin|startBackgroundLogin/);
+  assert.match(main, /if \(!shouldAutoStart\(settings\)\) setTimeout\(showLaunchHint, 1500\);/);
+  assert.match(main, /label: '버튼을 누르시면 해당 메뉴로 바로 이동합니다\.'/);
 });
