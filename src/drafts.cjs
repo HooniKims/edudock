@@ -7,6 +7,7 @@ function dateLabel(value) {
   if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) throw new Error('유효한 날짜를 입력해 주세요.');
   return `${year}. ${month}. ${day}.(${weekday[date.getDay()]})`;
 }
+const TOP_ITEM = /^(\d+)\.\s+/;
 // 초안 만들기 writes 일반기안 only. 출장·근무상황 drafts were moved to archive/draft-kinds.cjs
 // (0.10.8): both are typed into their own NEIS screens anyway.
 function generateDraft(input) {
@@ -25,7 +26,13 @@ function generateDraft(input) {
   if (attachments.length) warnings.push('붙임 표기만 작성했습니다. 실제 파일 첨부와 개수를 확인하세요.');
   const lines = []; let number = 1;
   if (v.basis) lines.push(`${number++}. 관련: ${v.basis}`);
-  lines.push(`${number}. ${v.purpose}`);
+  // A body already written as items (1. / 가. / (1) / (가) ...) keeps its structure; only its
+  // top-level numbers move down when "1. 관련" is placed in front. Plain text stays one item.
+  // Blank lines between items are kept; trailing spaces are not.
+  const bodyLines = v.purpose.replace(/\r\n?/g, '\n').split('\n').map(line => line.replace(/\s+$/, ''));
+  if (bodyLines.some(line => TOP_ITEM.test(line))) {
+    for (const line of bodyLines) lines.push(TOP_ITEM.test(line) ? line.replace(TOP_ITEM, () => `${number++}. `) : line);
+  } else lines.push(`${number}. ${v.purpose}`);
   const details = [['일시', when], ['장소', v.place], ['대상', v.audience]].filter(([, value]) => value);
   details.forEach(([name, value], i) => lines.push(`  ${'가나다라마바사'[i]}. ${name}: ${value}`));
   let body = lines.join('\n');

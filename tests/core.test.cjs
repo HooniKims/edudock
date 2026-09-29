@@ -52,3 +52,10 @@ test('fresh settings default to the right-edge vertical notch',()=>{
  const {sanitizedSettings}=require('../src/settings.cjs');
  assert.equal(sanitizedSettings({}).placement.edge,'right');
 });
+test('a body written as items keeps its hierarchy and moves down under 1. 관련',()=>{
+ const body=['1. 목적: 협의','2. 운영 계획','  가. 일시: 2026. 10. 7.(수)','    (1) 운영 방향','      (가) 현장체험학습','3. 협조 사항'].join('\n');
+ const withBasis=generateDraft({title:'t',basis:'교육과정 운영 계획',purpose:body}).body.split('\n');
+ assert.deepEqual(withBasis,['1. 관련: 교육과정 운영 계획','2. 목적: 협의','3. 운영 계획','  가. 일시: 2026. 10. 7.(수)','    (1) 운영 방향','      (가) 현장체험학습','4. 협조 사항  끝.']);
+ assert.equal(generateDraft({title:'t',purpose:body}).body.split('\n')[0],'1. 목적: 협의');
+ assert.equal(generateDraft({title:'t',purpose:'협의회를 개최합니다.'}).body,'1. 협의회를 개최합니다.  끝.');
+});
