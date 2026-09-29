@@ -169,7 +169,11 @@ function Get-OriginEvidence {
     $rawValues = [System.Collections.Generic.List[string]]::new()
     foreach ($address in @($Window.addressControls)) {
         if ($null -eq $address -or $address.controlType -ne 'Edit' -or $address.isPassword -eq $true -or $address.isOffscreen -eq $true) { continue }
-        if ($address.automationId -notin @('view_1021', 'addressEditBox') -and $address.name -notin @(
+        # Edge renumbers the omnibox id and renames it between releases (Edge 154: view_1017,
+        # '주소 표시줄 및 검색 창'), so its Chromium class is the primary signal and the ids and
+        # names are only fallbacks.
+        if ($address.className -cne 'OmniboxViewViews' -and $address.automationId -notin @('view_1021', 'view_1017', 'addressEditBox') -and $address.name -notin @(
+            (CodePoints @(0xC8FC,0xC18C)) + ' ' + (CodePoints @(0xD45C,0xC2DC,0xC904)) + ' ' + (CodePoints @(0xBC0F)) + ' ' + (CodePoints @(0xAC80,0xC0C9)) + ' ' + (CodePoints @(0xCC3D)),
             (CodePoints @(0xC8FC,0xC18C)) + ' ' + (CodePoints @(0xBC0F)) + ' ' + (CodePoints @(0xAC80,0xC0C9)) + ' ' + (CodePoints @(0xCC3D)),
             (CodePoints @(0xAC80,0xC0C9)) + ' ' + (CodePoints @(0xB610,0xB294)) + ' ' + (CodePoints @(0xC6F9)) + ' ' + (CodePoints @(0xC8FC,0xC18C)) + ' ' + (CodePoints @(0xC785,0xB825)),
             (CodePoints @(0xC8FC,0xC18C)) + ' ' + (CodePoints @(0xD45C,0xC2DC,0xC904)),
@@ -560,12 +564,16 @@ function Get-RealWindows {
         if ($null -eq $root -or $root.Current.ProcessId -ne $handle.pid -or $root.Current.IsOffscreen) { continue }
 
         $addressConditions = [System.Collections.Generic.List[System.Windows.Automation.Condition]]::new()
-        foreach ($automationId in @('view_1021', 'addressEditBox')) {
+        $omniboxClass = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ClassNameProperty, 'OmniboxViewViews')
+        $omniboxType = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit)
+        $addressConditions.Add([System.Windows.Automation.AndCondition]::new($omniboxType, $omniboxClass))
+        foreach ($automationId in @('view_1021', 'view_1017', 'addressEditBox')) {
             $idCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, $automationId)
             $typeCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit)
             $addressConditions.Add([System.Windows.Automation.AndCondition]::new($typeCondition, $idCondition))
         }
         foreach ($name in @(
+            (CodePoints @(0xC8FC,0xC18C)) + ' ' + (CodePoints @(0xD45C,0xC2DC,0xC904)) + ' ' + (CodePoints @(0xBC0F)) + ' ' + (CodePoints @(0xAC80,0xC0C9)) + ' ' + (CodePoints @(0xCC3D)),
             (CodePoints @(0xC8FC,0xC18C)) + ' ' + (CodePoints @(0xBC0F)) + ' ' + (CodePoints @(0xAC80,0xC0C9)) + ' ' + (CodePoints @(0xCC3D)),
             (CodePoints @(0xAC80,0xC0C9)) + ' ' + (CodePoints @(0xB610,0xB294)) + ' ' + (CodePoints @(0xC6F9)) + ' ' + (CodePoints @(0xC8FC,0xC18C)) + ' ' + (CodePoints @(0xC785,0xB825)),
             (CodePoints @(0xC8FC,0xC18C)) + ' ' + (CodePoints @(0xD45C,0xC2DC,0xC904)),
@@ -583,7 +591,7 @@ function Get-RealWindows {
                 $valuePattern = $null
                 if ($element.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$valuePattern)) { $value = [string]$valuePattern.Current.Value }
                 [pscustomobject]@{
-                    automationId = $element.Current.AutomationId; name = $element.Current.Name; controlType = 'Edit'
+                    automationId = $element.Current.AutomationId; name = $element.Current.Name; className = $element.Current.ClassName; controlType = 'Edit'
                     isPassword = $false; isOffscreen = $false; value = $value; legacyValue = (Read-LegacyValue -Element $element)
                 }
             }

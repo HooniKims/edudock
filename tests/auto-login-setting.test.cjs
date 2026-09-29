@@ -96,3 +96,30 @@ test('auto-login follows the stored password: saving turns it on, clearing turns
   const renderer = fs.readFileSync('renderer/renderer.js', 'utf8');
   assert.match(renderer, /element\('auto-login'\)\.disabled = !passwordSaved/);
 });
+
+test('a button pressed during the background login takes it over at once, without a "cancelled" flash', async () => {
+  const events = [];
+  let observations = 0;
+  const automation = new PortalAutomation({
+    status: event => events.push(event),
+    autoLogin: true,
+    openPortal: async () => {},
+    observeAuthenticated: async () => { observations += 1; return observations > 3; },
+    resumeAction: async id => ({ verified: true, id }),
+    pause: () => new Promise(resolve => setImmediate(resolve)),
+  });
+  const background = automation.startAutoLogin();
+  await new Promise(resolve => setImmediate(resolve));
+  const pressed = await automation.openMenu('neis');
+  assert.equal(pressed.ok, true, 'no "이전 작업이 진행 중" refusal inside the takeover grace');
+  assert.equal(pressed.phase, 'done');
+  assert.equal((await background).ok, false);
+  assert.equal(events.some(event => event.phase === 'cancelled'), false);
+});
+
+test('the saved password is typed in only while auto-login is on, and turning it on logs in right away', () => {
+  const main = fs.readFileSync('src/main.cjs', 'utf8');
+  assert.match(main, /getStoredPassword: \(\) => \(settings\.passwordSaved === true && settings\.autoLogin === true \?/);
+  assert.match(main, /if \(settings\.autoLogin\) startBackgroundLogin\(\);/);
+  assert.match(main, /if \(!automation \|\| automation\.busy \|\| settings\.autoLogin !== true\) return;/);
+});

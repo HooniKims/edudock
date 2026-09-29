@@ -61,12 +61,12 @@ class PortalAutomation {
       return result;
     } finally { if (timer) clearTimeout(timer); }
   }
-  cancel() {
+  cancel({ silent = false } = {}) {
     const operation = this.operation;
     if (!operation) return { ok: false, message: '취소할 로그인 작업이 없습니다.' };
     operation.cancelled = true; operation.cancel();
     if (this.operation === operation) { this.operation = null; this.busy = false; }
-    this.status('cancelled', '로그인 대기를 취소했습니다.', false);
+    if (!silent) this.status('cancelled', '로그인 대기를 취소했습니다.', false);
     return { ok: true, message: '로그인 대기를 취소했습니다.' };
   }
   retry() {
@@ -146,10 +146,13 @@ class PortalAutomation {
     if (!Object.hasOwn(menus, id)) return { ok: false, message: '지원하지 않는 메뉴입니다.' };
     // A press while something is running replaces it. Waiting out the previous task was the
     // whole reason the buttons felt dead after closing Edge.
-    if (this.busy && this.operation && this.now() - this.operation.startedAt < this.takeoverGraceMs) {
+    // A button pressed while the background (automatic) login is still running takes it over
+    // quietly: the teacher asked for a screen, not for the login to be "cancelled".
+    const replacingAutomatic = this.busy && Boolean(this.operation?.automatic) && options.automatic !== true;
+    if (!replacingAutomatic && this.busy && this.operation && this.now() - this.operation.startedAt < this.takeoverGraceMs) {
       return { ok: false, message: '이전 작업이 진행 중입니다.' };
     }
-    if (this.busy) this.cancel();
+    if (this.busy) this.cancel({ silent: replacingAutomatic });
     if (!options.retry) this.retryAction = null;
     const operation = this.createOperation(id, options.automatic === true); this.busy = true; this.operation = operation;
     try {
@@ -161,7 +164,10 @@ class PortalAutomation {
           this.retryAction = id; this.statusFor(operation, 'needs-user', message, false);
           return { ok: false, phase: 'needs-user', message };
         }
-        this.statusFor(operation, 'awaiting-user-auth', '일반 Edge의 공식 인증서 창에서 인증서를 선택하고 암호를 입력해 주세요.');
+        // Most presses find the portal already signed in, so this reads as a check, not a demand.
+        this.statusFor(operation, 'awaiting-user-auth', this.autoLogin
+          ? '로그인 상태를 확인하고 있어요. 필요하면 저장된 비밀번호로 로그인합니다.'
+          : '로그인 상태를 확인하고 있어요. 인증서 창이 뜨면 비밀번호를 직접 입력해 주세요.');
         await this.wait(operation, waitForUserAuthentication({ isAuthenticated: () => this.observeAuthenticated(operation), isCancelled: () => operation.cancelled || this.operation !== operation, pause: this.pause, timeoutMs: this.authTimeoutMs }));
         this.statusFor(operation, 'authenticated', '업무포털 로그인을 확인했습니다.');
         if (id !== 'portal' && !this.resumeAction) throw new Error('일반 Edge에서 원래 업무를 이어가는 연결이 아직 구성되지 않았습니다.');

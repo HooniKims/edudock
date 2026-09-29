@@ -1,3 +1,4 @@
+@font-face{font-family:'Great Vibes';src:url('../assets/fonts/greatvibes/GreatVibes-Regular.ttf') format('truetype');font-weight:400;font-display:block}
 @font-face{font-family:Paperlogy;src:url('../assets/fonts/Paperlogy-4Regular.ttf') format('truetype');font-weight:400;font-display:swap}
 @font-face{font-family:Paperlogy;src:url('../assets/fonts/Paperlogy-6SemiBold.ttf') format('truetype');font-weight:600;font-display:swap}
 :root{color-scheme:light;--shell:rgba(245,247,252,.97);--paper:#fcfdff;--ink:#202a3c;--secondary:#5d697d;--muted:#748094;--line:#dce2ed;--switch-idle:#cbd3e0;--blue:#2361ce;--blue-pale:#e8effe;--violet:#7354bd;--violet-pale:#f0eafa;--mint:#257562;--mint-pale:#e7f4ef;--amber:#906121;--r-shell:28px;--r-field:12px;--r-icon:18px;--motion:160ms cubic-bezier(.2,.8,.2,1);font-family:Paperlogy,'Malgun Gothic',system-ui,sans-serif;font-size:13px;color:var(--ink);word-break:keep-all}
@@ -130,3 +131,9 @@ h1,.greeting h1,.brand{font-family:Paperlogy,'Malgun Gothic',sans-serif}
 .update-row .primary.small{min-height:32px;font-size:12px;padding:8px 12px;white-space:nowrap}
 .update-progress{display:block;height:6px;margin-top:8px;border-radius:3px;background:#e3e8f1;overflow:hidden}
 .update-progress>span{display:block;height:100%;width:4%;background:var(--blue);border-radius:3px;transition:width 300ms ease-out}
+
+/* ---- Maker's credit at the end of settings ---- */
+.credit{text-align:center;padding:10px 0 6px}
+.credit-sign{margin:0;font:400 38px/1.15 'Great Vibes',cursive;background:linear-gradient(100deg,var(--blue),var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent;user-select:none}
+.credit-maker{margin:4px 0 0;font-size:12.5px;color:var(--secondary)}
+.credit .version{margin-top:4px}

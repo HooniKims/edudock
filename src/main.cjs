@@ -88,7 +88,7 @@ function markPasswordSaved(saved) {
   // The in-flight login is left alone when the password is dropped: after a rejected password the
   // certificate window is still open and the teacher types it by hand.
   settings = sanitizedSettings({ ...settings, passwordSaved: saved, autoLogin: saved });
-  if (saved) automation?.setAutoLogin(true);
+  if (saved) { automation?.setAutoLogin(true); startBackgroundLogin(); }
   persist();
   publish();
 }
@@ -221,6 +221,13 @@ function hideNotch() {
   return { ok: true };
 }
 
+// Turning auto-login on (or saving the password) logs in right away in the background, so the
+// next button press finds the portal already signed in and goes straight to its screen.
+function startBackgroundLogin() {
+  if (!automation || automation.busy || settings.autoLogin !== true) return;
+  automation.startAutoLogin().catch(error => automation.status('error', error instanceof Error ? error.message : '자동 로그인을 시작하지 못했습니다.', false));
+}
+
 function applySettings(patch) {
   const cleaned = cleanPatch(patch);
   if (cleaned.autoLogin === true && settings.passwordSaved !== true) throw new Error('먼저 인증서 비밀번호를 저장해 주세요. 저장하면 자동 로그인이 켜집니다.');
@@ -236,7 +243,10 @@ function applySettings(patch) {
     },
   });
   persist();
-  if (Object.hasOwn(cleaned, 'autoLogin')) automation?.setAutoLogin(settings.autoLogin);
+  if (Object.hasOwn(cleaned, 'autoLogin')) {
+    automation?.setAutoLogin(settings.autoLogin);
+    if (settings.autoLogin) startBackgroundLogin();
+  }
   notch.apply(settings);
   publish();
   return state();
@@ -391,7 +401,9 @@ app.whenReady().then(() => {
     runNative: (request, operation) => ordinaryEdgeBridge.run(request, operation),
     openExternal: url => shell.openExternal(url),
     draftHandoff,
-    getStoredPassword: () => (settings.passwordSaved === true ? secrets?.load() ?? null : null),
+    // The auto-login switch decides whether the saved password is typed in: on, every button logs
+    // in by itself; off, the certificate window waits for the teacher.
+    getStoredPassword: () => (settings.passwordSaved === true && settings.autoLogin === true ? secrets?.load() ?? null : null),
     onPasswordRejected: () => { secrets?.clear(); markPasswordSaved(false); },
     getDriveHint: () => settings.certificateDriveHint,
     saveDriveHint: driveId => {
@@ -582,7 +594,7 @@ app.whenReady().then(() => {
     console.error('updater unavailable', error);
   }
   publish();
-  if (settings.autoLogin) automation.startAutoLogin().catch(error => automation.status('error', error instanceof Error ? error.message : '자동 로그인을 시작하지 못했습니다.', false));
+  startBackgroundLogin();
 });
 
 app.on('before-quit', () => {

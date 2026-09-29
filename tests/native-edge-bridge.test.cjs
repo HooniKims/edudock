@@ -756,3 +756,23 @@ test('restoreMinimised is a boolean the helper accepts and nothing else', () => 
   assert.match(source, /function Restore-MinimisedEdgeWindows/);
   assert.match(source, /ShowWindowAsync\(\$Handle, 4\)/);
 });
+
+test('Edge 154 omnibox (view_1017, renamed) is recognised by its Chromium class, and an unrelated edit is not', () => {
+  const edge154 = runBridge(JSON.stringify({ command: 'inspect' }), { windows: [windowFixture({
+    addressControls: [{ automationId: 'view_1017', className: 'OmniboxViewViews', name: '주소 표시줄 및 검색 창', controlType: 'Edit', isPassword: false, isOffscreen: false, value: 'https://sen.eduptl.kr/bpm_lgn_lg00_001.do' }],
+  })] }).output;
+  assert.equal(edge154.status, 'ok');
+  assert.equal(edge154.windows[0].origin, 'https://sen.eduptl.kr');
+
+  // A future renumbering with only the class left intact still works.
+  const renumbered = runBridge(JSON.stringify({ command: 'inspect' }), { windows: [windowFixture({
+    addressControls: [{ automationId: 'view_9999', className: 'OmniboxViewViews', name: 'something new', controlType: 'Edit', isPassword: false, isOffscreen: false, value: 'https://sen.eduptl.kr/' }],
+  })] }).output;
+  assert.equal(renumbered.windows[0].origin, 'https://sen.eduptl.kr');
+
+  // A page text field that merely contains the portal URL is not the address bar.
+  const pageField = runBridge(JSON.stringify({ command: 'inspect' }), { windows: [windowFixture({
+    addressControls: [{ automationId: 'search', className: 'Textfield', name: '검색', controlType: 'Edit', isPassword: false, isOffscreen: false, value: 'https://sen.eduptl.kr/' }],
+  })] }).output;
+  assert.equal(pageField.windows[0].origin, null);
+});

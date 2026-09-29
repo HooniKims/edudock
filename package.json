@@ -1,9 +1,9 @@
 {
   "name": "edudock",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "description": "서울교육 업무포털과 나이스를 위한 데스크톱 위젯",
   "main": "src/main.cjs",
-  "author": "HooniKims",
+  "author": "김형훈 (HooniKim)",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
@@ -62,7 +62,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "shortcutName": "업무포털 도우미",
-      "artifactName": "EduDock-Setup-${version}.${ext}"
+      "artifactName": "EduDock-Setup-${version}.${ext}",
+      "include": "build/installer.nsh"
     },
     "electronDist": "node_modules/electron/dist",
     "portable": {
@@ -73,7 +74,8 @@
       "owner": "HooniKims",
       "repo": "edudock",
       "releaseType": "release"
-    }
+    },
+    "copyright": "Copyright © 2026 등촌중학교 김형훈 (HooniKim)"
   },
   "repository": {
     "type": "git",

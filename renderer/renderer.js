@@ -57,8 +57,8 @@ function renderState(next) {
   element('auto-login-help').textContent = !passwordSaved
     ? '먼저 위에서 인증서 비밀번호를 저장하면 켤 수 있어요.'
     : next.settings.autoLogin
-      ? '켜짐 · 앱을 켤 때 Edge에서 인증서 로그인까지 자동으로 진행해요.'
-      : '꺼짐 · 업무 버튼을 누를 때 로그인해요.';
+      ? '켜짐 · 앱을 켤 때 로그인해 두고, 버튼을 누르면 저장된 비밀번호로 바로 로그인해 그 화면까지 가요. 이미 로그인돼 있으면 바로 이동해요.'
+      : '꺼짐 · 버튼을 누르면 로그인 창을 열고, 비밀번호는 직접 입력해요.';
   document.querySelector('.pin-button').setAttribute('aria-pressed', String(Boolean(next.settings.alwaysOnTop)));
   renderMonitorMap(next);
   renderUpdate(next.update, next.version);
@@ -130,7 +130,7 @@ element('always-on-top').addEventListener('change', (event) => updateSettings({ 
 element('auto-login').addEventListener('change', async (event) => {
   const enabled = event.target.checked;
   await updateSettings({ autoLogin: enabled });
-  if (state.settings.autoLogin === enabled) status(enabled ? '자동 로그인을 켰어요. 다음에 앱을 켤 때부터 적용돼요.' : '자동 로그인을 껐어요. 업무 버튼을 누를 때 로그인해요.', 'success');
+  if (state.settings.autoLogin === enabled) status(enabled ? '자동 로그인을 켰어요. 지금 바로 로그인해 둘게요.' : '자동 로그인을 껐어요. 버튼을 누르면 비밀번호는 직접 입력해요.', 'success');
 });
 element('opacity').addEventListener('input', (event) => { element('opacity-value').textContent = `${event.target.value}%`; });
 element('opacity').addEventListener('change', (event) => updateSettings({ opacity: Number(event.target.value) / 100 }));
