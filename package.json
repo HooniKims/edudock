@@ -85,7 +85,9 @@
         "ko-KR"
       ],
       "backgroundColor": "transparent",
-      "artifactName": "EduDock-Store-${version}.${ext}"
+      "artifactName": "EduDock-Store-${version}.${ext}",
+      "minVersion": "10.0.17763.0",
+      "maxVersionTested": "10.0.26100.0"
     }
   },
   "repository": {
