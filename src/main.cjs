@@ -190,7 +190,8 @@ function showAuxiliary(view, section = null) {
   // Anything about an update opens settings on the update row itself; so does opening settings
   // while an update is waiting to be fetched, fetched or installed.
   const pending = ['available', 'downloading', 'ready'].includes(updater?.state.phase);
-  const focusSection = target === 'settings' ? (section || (pending ? 'update' : null)) : null;
+  const requested = typeof section === 'string' ? section : null;
+  const focusSection = target === 'settings' ? (requested || (pending ? 'update' : null)) : null;
   clearTimeout(popoverHideTimer);
   popover?.hide();
   notch?.dispatch('focus', false);
@@ -338,7 +339,7 @@ function installUpdate() {
 function promptForUpdate(update) {
   const step = update?.phase === 'available' ? 'available' : update?.phase === 'ready' ? 'ready' : null;
   if (!step || !update.available || updateAnswered[step] === update.available) return;
-  if (updateQuestion?.step === step && updateQuestion.version === update.available) return;
+  if (updateQuestion?.step === step && updateQuestion.version === update.available && popover?.kind === 'update') return;
   if (automation?.busy || guide || !notch?.window || notch.window.isDestroyed() || !notch.window.isVisible()) {
     const retry = setTimeout(() => promptForUpdate(updater?.state), 10000);
     retry.unref?.();
@@ -481,7 +482,9 @@ app.whenReady().then(() => {
 
   handle('state', ['notch', 'auxiliary'], state);
   handle('settings', ['notch', 'auxiliary'], applySettings);
-  handle('open-auxiliary', ['notch', 'auxiliary'], showAuxiliary);
+  // Only the view name crosses IPC. Passing showAuxiliary itself handed it the IPC event as its
+  // second argument, which was then sent to the renderer and crashed the app (0.10.5–0.10.7).
+  handle('open-auxiliary', ['notch', 'auxiliary'], view => showAuxiliary(view));
   handle('notch-interaction', ['notch', 'popover'], request => {
     if (!request || typeof request.type !== 'string') throw new Error('상호작용 요청이 올바르지 않습니다.');
     if (request.type === 'popup' && request.value) clearTimeout(popoverHideTimer);
@@ -522,7 +525,9 @@ app.whenReady().then(() => {
     if (!request || !['tooltip', 'status', 'guide'].includes(request.kind)) throw new Error('팝오버 요청이 올바르지 않습니다.');
     // Hover tooltips never cover an unanswered update question; a deliberate status click may,
     // and then the question is asked again on the next check.
-    if (updateQuestion && request.kind === 'tooltip') return { ok: false, reason: 'update-question-open' };
+    // Judged by what is on screen: a question closed some other way (a button press hides the
+    // popover) must not keep blocking every tooltip afterwards.
+    if (popover.kind === 'update' && request.kind === 'tooltip') return { ok: false, reason: 'update-question-open' };
     updateQuestion = null;
     const anchor = request.anchor;
     if (!anchor || !['x', 'y', 'width', 'height'].every(key => Number.isFinite(anchor[key]))) throw new Error('팝오버 위치가 올바르지 않습니다.');

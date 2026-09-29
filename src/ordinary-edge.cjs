@@ -610,6 +610,12 @@ class OrdinaryEdgeAdapter {
       await this.invoke(state, action, operation);
       await this.pause(100);
       window = await this.inspect(operation, state.target, 'neis');
+      // Opening a menu leaf brings its task tab up a moment later. Reading too early made the walk
+      // "select" a tab that was about to be active anyway — a whole extra step of about 3 seconds.
+      for (let settle = 0; action === openAction && settle < 3 && this.now() < deadline && window?.neisTaskState && window.neisTaskState.activeTask !== task; settle += 1) {
+        await this.pause(350);
+        window = await this.inspect(operation, state.target, 'neis');
+      }
       requireAuthenticationIfReturned(window);
       if (!window || window.landing !== 'neis') throw needsUser('task-landing-lost', `${TASK_LABELS[task]} 메뉴로 이동하는 중 나이스 화면을 놓쳤습니다. 나이스 화면을 확인한 뒤 다시 시도해 주세요.`);
     }

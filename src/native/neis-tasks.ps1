@@ -146,9 +146,10 @@ function New-NeisEmptyState {
 }
 
 function Get-NeisTaskState {
-    param([Parameter(Mandatory)][object]$Root, [Parameter(Mandatory)][object]$Target)
+    param([Parameter(Mandatory)][object]$Root, [Parameter(Mandatory)][object]$Target, [object[]]$Controls = $null)
     if (-not (Test-NeisTargetIdentity -Root $Root -Target $Target)) { return New-NeisEmptyState }
-    $controls = @(Get-NeisControls -Root $Root | Where-Object { [int]$_.processId -eq [int]$Target.pid })
+    # A full walk of the NEIS page costs about a second; callers that already walked it pass it in.
+    $controls = if ($null -ne $Controls) { @($Controls) } else { @(Get-NeisControls -Root $Root | Where-Object { [int]$_.processId -eq [int]$Target.pid }) }
     $myMenu = @(Find-NeisSemanticControls -Controls $controls -Kind 'my-menu')
     $duty = @(Find-NeisSemanticControls -Controls $controls -Kind 'duty')
     $attendanceLeaves = @(Find-NeisSemanticControls -Controls $controls -Kind 'leaf-attendance')
@@ -270,14 +271,16 @@ function Invoke-NeisTaskAction {
     if ($Action -cnotin $script:NeisSafeActions) { return [pscustomobject][ordered]@{ status = 'unsafe-action'; action = $Action } }
     if ($Root.PSObject.Properties.Name -contains 'cancelled' -and $Root.cancelled -eq $true) { return [pscustomobject][ordered]@{ status = 'cancelled'; action = $Action } }
     if (-not (Test-NeisTargetIdentity -Root $Root -Target $Target)) { return [pscustomobject][ordered]@{ status = 'unavailable'; action = $Action } }
-    $state = Get-NeisTaskState -Root $Root -Target $Target
+    # One walk of the page serves both the state check and finding the control to press; this
+    # used to walk it twice per step, which made every 나이스 menu step take about three seconds.
+    $freshControls = @(Get-NeisControls -Root $Root | Where-Object { [int]$_.processId -eq [int]$Target.pid })
+    $state = Get-NeisTaskState -Root $Root -Target $Target -Controls $freshControls
     if ($Action -cnotin @($state.actions)) { return [pscustomobject][ordered]@{ status = 'unavailable'; action = $Action } }
     $kind = switch ($Action) {
         'select-my-menu' { 'my-menu' }; 'expand-duty' { 'duty' }
         'select-attendance-tab' { 'tab-attendance' }; 'select-trip-tab' { 'tab-trip' }
         'open-attendance' { 'leaf-attendance' }; 'open-trip' { 'leaf-trip' }
     }
-    $freshControls = @(Get-NeisControls -Root $Root | Where-Object { [int]$_.processId -eq [int]$Target.pid })
     $fresh = @(Find-NeisSemanticControls -Controls $freshControls -Kind $kind)
     if ($fresh.Count -ne 1 -or -not (Test-NeisTargetIdentity -Root $Root -Target $Target)) { return [pscustomobject][ordered]@{ status = 'unavailable'; action = $Action } }
     $control = $fresh[0]

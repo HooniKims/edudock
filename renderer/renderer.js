@@ -86,17 +86,10 @@ function showView(name) {
   }
 }
 
+// 초안 만들기 writes 일반기안 only (출장·근무상황 were archived in 0.10.8).
 function selectKind(kind) {
   activeKind = kind;
   element('draft-form').elements.namedItem('kind').value = kind;
-  all('[data-kind]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.kind === kind)));
-  all('[data-kinds]').forEach((item) => {
-    item.hidden = !item.dataset.kinds.split(' ').includes(kind);
-    item.querySelectorAll('input,textarea,select').forEach((field) => { field.disabled = item.hidden; });
-  });
-  const titleField = element('draft-form').elements.namedItem('title');
-  const examples = { official: '예: 2학기 학년 협의회 운영 계획', trip: '예: 수업 나눔 연수 참석', attendance: '예: 개인 사유에 따른 연가 신청' };
-  titleField.placeholder = examples[kind];
 }
 
 async function openMenu(id) {
@@ -113,7 +106,6 @@ all('[data-view]').forEach((button) => button.addEventListener('click', () => {
   else showView(button.dataset.view);
 }));
 all('[data-menu]').forEach((button) => button.addEventListener('click', () => openMenu(button.dataset.menu)));
-all('[data-kind]').forEach((button) => button.addEventListener('click', () => { selectKind(button.dataset.kind); fitDraftWindow(); }));
 all('[data-window]').forEach((button) => button.addEventListener('click', async () => {
   try {
     const result = await invoke('window', button.dataset.window);
@@ -370,7 +362,7 @@ element('save-draft').addEventListener('click', async () => {
     if (result) status(result.message || (result.ok ? '초안을 파일로 저장했어요.' : '저장을 취소했어요.'), result.ok ? 'success' : 'idle');
   } catch (error) { report(error); }
 });
-element('open-draft-menu').addEventListener('click', () => openMenu({ official: 'draft', trip: 'trip', attendance: 'attendance' }[generatedKind]));
+element('open-draft-menu').addEventListener('click', () => openMenu('draft'));
 // Only 일반기안 has a form to write into; 출장·근무상황 are filled on their own screens.
 element('fill-draft').addEventListener('click', async () => {
   const button = element('fill-draft');

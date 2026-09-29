@@ -100,7 +100,7 @@ test('updates are checked every 15 minutes and the widget asks before downloadin
   assert.match(main, /popover\.show\(\{ kind: 'update'/);
   assert.match(main, /if \(automation\?\.busy \|\| guide \|\|/, 'never interrupts a login or the guide');
   assert.match(main, /if \(answer\.accepted !== true\) return \{ ok: true, accepted: false \};/, 'only an explicit yes acts');
-  assert.match(main, /if \(updateQuestion && request\.kind === 'tooltip'\) return/);
+  assert.match(main, /if \(popover\.kind === 'update' && request\.kind === 'tooltip'\) return/, 'only a question actually on screen holds tooltips back');
   const popup = fs.readFileSync('renderer/popup.js', 'utf8');
   assert.match(popup, /element\('update-yes'\)\.addEventListener\('click', \(\) => answerUpdate\(true\)\)/);
   assert.match(popup, /if \(currentData\.kind === 'update'\) \{ answerUpdate\(false\); return; \}/, 'Escape means later');
@@ -141,4 +141,12 @@ test('update actions open settings scrolled to the update row', () => {
   assert.match(main, /if \(focusSection\) window\.webContents\.send\('aux-section', focusSection\);/);
   const renderer = fs.readFileSync('renderer/renderer.js', 'utf8');
   assert.match(renderer, /row\.scrollIntoView\(\{ block: 'center'/);
+});
+
+test('opening settings over IPC passes only the view name, never the IPC event', () => {
+  const fs = require('node:fs');
+  const main = fs.readFileSync('src/main.cjs', 'utf8');
+  // Handing showAuxiliary to handle() directly made the IPC event its "section" and crashed the app.
+  assert.match(main, /handle\('open-auxiliary', \['notch', 'auxiliary'\], view => showAuxiliary\(view\)\);/);
+  assert.match(main, /const requested = typeof section === 'string' \? section : null;/);
 });

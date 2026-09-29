@@ -20,11 +20,12 @@ test('missing facts are not invented and date/time validation rejects impossible
  assert.equal(draft.body,'1. 협의회를 개최합니다.  끝.');
  assert.ok(draft.warnings.includes('일시 미확정'));
  assert.throws(()=>dateLabel('2026-02-30'));
- assert.throws(()=>generateDraft({kind:'trip',title:'출장',purpose:'연수',startTime:'15:00',endTime:'14:00'}));
+ assert.throws(()=>generateDraft({kind:'official',title:'검토',purpose:'협의',startTime:'15:00',endTime:'14:00'}));
 });
-test('trip and attendance drafts include only supplied information',()=>{
- assert.equal(generateDraft({kind:'trip',title:'연수',purpose:'직무연수',place:'교육청'}).body,'출장 목적: 직무연수\n출장지: 교육청');
- assert.equal(generateDraft({kind:'attendance',title:'연가',purpose:'개인 사유',leaveType:'연가'}).body,'근무상황 종류: 연가\n사유: 개인 사유');
+test('초안 만들기 writes 일반기안 only; 출장·근무상황 now live in the archive',()=>{
+ assert.throws(()=>generateDraft({kind:'trip',title:'연수',purpose:'직무연수'}),/일반기안/);
+ assert.throws(()=>generateDraft({kind:'attendance',title:'연가',purpose:'개인 사유'}),/일반기안/);
+ assert.equal(generateDraft({title:'검토',purpose:'협의회를 개최합니다.'}).metadata.kind,'official');
 });
 test('renderer settings cannot set arbitrary paths or inject secrets',()=>{
   assert.deepEqual(cleanPatch({credentialPath:'C:/sensitive',password:'never',certificateHint:'name',useAccountPasswordForCertificate:true,orientation:'other',alwaysOnTop:true,placement:{edge:'bottom',scale:1.2}}),{alwaysOnTop:true,placement:{edge:'bottom',scale:1.2}});

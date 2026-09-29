@@ -153,3 +153,4 @@ h1,.greeting h1,.brand{font-family:Paperlogy,'Malgun Gothic',sans-serif}
 #draft-view #result-body{resize:none;overflow:hidden;min-height:180px;line-height:1.75}
 #draft-view .primary.full{min-height:40px}
 #draft-view .field .optional{margin:0 0 0 4px}
+#draft-view #result-body{font-family:'GulimChe','굴림체','D2Coding',monospace;font-size:14px;letter-spacing:0}
