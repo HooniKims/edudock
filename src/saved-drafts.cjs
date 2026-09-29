@@ -38,7 +38,13 @@ function createSavedDrafts({ directory, fs = nodeFs, now = () => new Date() }) {
   function write(items) {
     fs.mkdirSync(directory, { recursive: true });
     fs.writeFileSync(`${file}.tmp`, JSON.stringify(items, null, 2), 'utf8');
-    fs.renameSync(`${file}.tmp`, file);
+    // Antivirus or the search indexer can hold the file for a moment on Windows; retry briefly.
+    for (let attempt = 0; ; attempt++) {
+      try { fs.renameSync(`${file}.tmp`, file); break; } catch (error) {
+        if (attempt >= 9 || !['EPERM', 'EBUSY', 'EACCES'].includes(error.code)) throw error;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+      }
+    }
     return items;
   }
 
