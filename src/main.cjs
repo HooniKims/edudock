@@ -298,7 +298,7 @@ function buildTrayMenu() {
       ? { label: `재시작하여 새 버전 ${updater.state.available || ''} 설치`, click: installUpdate }
       : updater?.state.phase === 'available'
         ? { label: `새 버전 ${updater.state.available || ''} 내려받기`, click: () => { if (updater.state.mode === 'portable') updater.openReleasePage(); else { showAuxiliary('settings', 'update'); void updater.download(); } } }
-        : { label: '업데이트 확인', enabled: Boolean(updater) && updater.state.mode !== 'development', click: () => { showAuxiliary('settings', 'update'); void updater?.check(); } },
+        : { label: '업데이트 확인', enabled: Boolean(updater) && !['development', 'store'].includes(updater.state.mode), click: () => { showAuxiliary('settings', 'update'); void updater?.check(); } },
     { type: 'separator' },
     { label: '종료', click: () => { quitting = true; app.quit(); } },
   ]);

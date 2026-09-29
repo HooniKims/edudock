@@ -188,8 +188,10 @@ function renderUpdate(update, version) {
   const button = element('update-action');
   const bar = element('update-progress');
   const current = `현재 ${version || ''}`.trim();
-  if (!update || update.mode === 'development') {
-    element('update-message').textContent = `${current} · 개발 실행에서는 업데이트를 확인하지 않아요.`;
+  if (!update || update.mode === 'development' || update.mode === 'store') {
+    element('update-message').textContent = update?.mode === 'store'
+      ? `${current} · Microsoft Store에서 자동으로 업데이트돼요.`
+      : `${current} · 개발 실행에서는 업데이트를 확인하지 않아요.`;
     button.hidden = true; bar.hidden = true; return;
   }
   const phase = update.phase;

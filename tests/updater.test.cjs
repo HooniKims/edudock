@@ -23,6 +23,16 @@ test('development runs never check', async () => {
   assert.equal(loaded, false);
 });
 
+test('the Microsoft Store copy leaves updates to the Store', async () => {
+  let loaded = false;
+  const updater = createUpdater({ app: app(true), repository, env: {}, windowsStore: true, loadAutoUpdater: () => { loaded = true; } });
+  assert.equal(updater.state.mode, 'store');
+  assert.equal(updater.state.phase, 'disabled');
+  await updater.check();
+  updater.start();
+  assert.equal(loaded, false);
+});
+
 test('portable copy reports a newer GitHub release and links only to github.com', async () => {
   const net = { fetch: async url => { assert.match(url, /api\.github\.com\/repos\/someone\/edudock\/releases\/latest/); return { ok: true, json: async () => ({ tag_name: 'v1.2.0', html_url: 'https://github.com/someone/edudock/releases/tag/v1.2.0' }) }; } };
   const opened = [];

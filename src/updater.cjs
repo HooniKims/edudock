@@ -34,10 +34,12 @@ function isNewer(candidate, current) {
   return false;
 }
 
-function createUpdater({ app, shell, net, repository, env = process.env, loadAutoUpdater, onChange, now = Date.now, spawn = require('node:child_process').spawn }) {
-  const mode = !app.isPackaged ? 'development' : env.PORTABLE_EXECUTABLE_DIR ? 'portable' : 'installed';
+function createUpdater({ app, shell, net, repository, env = process.env, windowsStore = process.windowsStore === true, loadAutoUpdater, onChange, now = Date.now, spawn = require('node:child_process').spawn }) {
+  // The Microsoft Store copy is updated by the Store itself, so it never checks GitHub.
+  const mode = !app.isPackaged ? 'development' : windowsStore ? 'store' : env.PORTABLE_EXECUTABLE_DIR ? 'portable' : 'installed';
+  const selfUpdating = mode === 'development' || mode === 'store';
   const releasesUrl = `https://github.com/${repository.owner}/${repository.repo}/releases/latest`;
-  let state = { mode, phase: mode === 'development' ? 'disabled' : 'idle', current: app.getVersion(), available: null, progress: null, message: '', checkedAt: null, releaseUrl: releasesUrl };
+  let state = { mode, phase: selfUpdating ? 'disabled' : 'idle', current: app.getVersion(), available: null, progress: null, message: '', checkedAt: null, releaseUrl: releasesUrl };
   let autoUpdater = null;
   let timers = [];
   let checking = null;
@@ -98,7 +100,7 @@ function createUpdater({ app, shell, net, repository, env = process.env, loadAut
   }
 
   function check() {
-    if (mode === 'development') return Promise.resolve(snapshot());
+    if (selfUpdating) return Promise.resolve(snapshot());
     // Once a version is being fetched or waiting to install there is nothing newer to ask about.
     if (state.phase === 'ready' || state.phase === 'downloading') return Promise.resolve(snapshot());
     if (checking) return checking;
@@ -111,7 +113,7 @@ function createUpdater({ app, shell, net, repository, env = process.env, loadAut
   }
 
   function start() {
-    if (mode === 'development') return;
+    if (selfUpdating) return;
     const first = setTimeout(() => { void check(); }, CHECK_DELAY_MS);
     const repeat = setInterval(() => { void check(); }, CHECK_INTERVAL_MS);
     first.unref?.();
