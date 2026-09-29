@@ -81,7 +81,9 @@ test('an editor already open is left alone and a fresh form is opened beside it'
   assert.equal(result.reused, false);
   assert.equal(result.editor.hwnd, fresh.hwnd);
   assert.deepEqual(calls.map(call => call.command).slice(0, 4), ['inspect-editors', 'open-public-form', 'inspect-editors', 'inspect-editors']);
-  assert.equal(calls.some(call => call.command === 'focus-editor'), false, 'nothing is done to the existing window');
+  // The only window ever raised is the new one; the existing editor is never a target.
+  const raised = calls.filter(call => call.command === 'focus-editor');
+  assert.ok(raised.every(call => call.target === `${fresh.pid}|${fresh.processStartedAt}|${fresh.hwnd}`), 'nothing is done to the existing window');
 });
 
 test('existing documents of any kind never block a new form and are never the result', async () => {
@@ -663,4 +665,14 @@ test('a non-transient helper failure during the wait is not retried away', async
   });
   await assert.rejects(coordinator.open(operation()), error => error.code === 'invalid-response');
   assert.equal(polls, 2, 'one look before the click, one after — no retry loop on malformed output');
+});
+
+test('the new 기안창 is raised only while the teacher is still with the task, never over other work', () => {
+  const fs = require('node:fs');
+  const draftHelper = fs.readFileSync(require('node:path').join(__dirname, '..', 'src', 'native', 'edufine-draft.ps1'), 'utf8');
+  assert.match(draftHelper, /if \(\[DraftWindowActivation\]::UserElsewhere\(\)\) \{ \$focused = \$false/);
+  const edgeHelper = fs.readFileSync(require('node:path').join(__dirname, '..', 'src', 'native', 'ordinary-edge.ps1'), 'utf8');
+  assert.match(edgeHelper, /if \(-not \[OrdinaryEdgeNativeV1\]::UserElsewhere\(\)\) \{ \$null = \[OrdinaryEdgeNativeV1\]::Activate\(\$targetHandle\) \}/);
+  const portal = fs.readFileSync(require('node:path').join(__dirname, '..', 'src', 'portal.cjs'), 'utf8');
+  assert.match(portal, /resumed\.raised === false \? ' 다른 작업을 방해하지 않도록 뒤에 열어 두었어요/);
 });

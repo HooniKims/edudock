@@ -268,12 +268,27 @@ class DraftHandoffCoordinator {
         // and a write that had already started ran into that modal. Wait until no prompt has
         // shown for a moment before handing the window over.
         const quiet = await this.#awaitQuiet(fingerprint, operation, settled.autosave);
-        return Object.freeze({ editor: quiet.editor, reused: false, autosave: quiet.autosave });
+        // The window this press opened is what the teacher asked to see. Launched by another
+        // process while the widget holds focus, it otherwise opens behind Edge and only blinks in
+        // the taskbar — which read as "the 기안창 never opened". Only this new window is raised;
+        // the teacher's other editors are never touched. Raising is best-effort, never a failure.
+        const focused = await this.#raise(quiet.editor, operation);
+        return Object.freeze({ editor: quiet.editor, reused: false, autosave: quiet.autosave, focused });
       }
     }
     throwIfCancelled(operation);
     if (unverified) throw new DraftHandoffError('unsafe-new-editor', 'New WXS editor is not a verified general draft form');
     throw new DraftHandoffError('timeout', 'Draft handoff timed out');
+  }
+
+  async #raise(editor, operation) {
+    try {
+      const response = await this.#run({ command: 'focus-editor', target: publicFingerprint(editor) }, operation);
+      return response.focused === true;
+    } catch (error) {
+      throwIfCancelled(operation);
+      return false;
+    }
   }
 
   async #awaitQuiet(fingerprint, operation, autosave, { quietPolls = 3, pollMs = 400, maxMs = 15000 } = {}) {

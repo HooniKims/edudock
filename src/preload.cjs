@@ -13,7 +13,7 @@ contextBridge.exposeInMainWorld('portal', {
   notchPlacement: invoke('notch-placement'), notchMove: invoke('notch-move'), notchContextMenu: invoke('notch-context-menu'), placementOrientation: invoke('placement-orientation'),
   guideStart: invoke('guide-start'), guideNext: invoke('guide-next'), guideSkip: invoke('guide-skip'),
   guideSavePassword: invoke('guide-save-password'), clearPassword: invoke('clear-password'), savePassword: invoke('save-password'),
-  updateCheck: invoke('update-check'), updateInstall: invoke('update-install'), updateOpenPage: invoke('update-open-page'),
+  updateCheck: invoke('update-check'), updateAnswer: invoke('update-answer'), updateDownload: invoke('update-download'), updateInstall: invoke('update-install'), updateOpenPage: invoke('update-open-page'),
   onStatus: callback => listen('status', callback), onState: callback => listen('state-update', callback),
   onAuxView: callback => listen('aux-view', callback), onNotchShape: callback => listen('notch-shape', callback),
   onNotchAnimate: callback => listen('notch-animate', callback),

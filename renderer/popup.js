@@ -31,6 +31,14 @@ function render(data) {
   element('label').textContent = data.label;
   element('status').hidden = data.kind !== 'status';
   element('guide').hidden = data.kind !== 'guide';
+  element('update').hidden = data.kind !== 'update';
+  if (data.kind === 'update') {
+    const question = data.update || {};
+    element('update-body').textContent = question.body || '';
+    element('update-yes').textContent = question.yes || '예';
+    element('update-no').textContent = question.no || '나중에';
+    element('update-yes').focus({ preventScroll: true });
+  }
   if (data.kind === 'status') {
     const status = data.status || {};
     element('phase').textContent = status.label || '업무 상태';
@@ -66,7 +74,7 @@ if (api.onGuideStep) api.onGuideStep(step => { if (step) render({ kind: 'guide',
 
 document.body.addEventListener('pointerenter', () => api.notchInteraction({ type: 'popup', value: true }));
 document.body.addEventListener('pointerleave', () => {
-  if (document.hasFocus() || currentData.kind === 'guide') return;
+  if (document.hasFocus() || currentData.kind === 'guide' || currentData.kind === 'update') return;
   api.notchInteraction({ type: 'popup', value: false });
   api.hidePopover({ delay: 250 });
 });
@@ -85,6 +93,15 @@ all('.pw-eye').forEach(button => button.addEventListener('click', () => {
 }));
 ['pw-first', 'pw-second'].forEach(id => element(id).addEventListener('input', refreshPasswordState));
 element('guide-password').addEventListener('submit', event => event.preventDefault());
+
+// The update question is answered only by one of these two buttons — nothing else closes it
+// as a "yes".
+async function answerUpdate(accepted) {
+  try { await api.updateAnswer({ step: currentData.update?.step, accepted }); } catch {}
+  await api.hidePopover();
+}
+element('update-yes').addEventListener('click', () => answerUpdate(true));
+element('update-no').addEventListener('click', () => answerUpdate(false));
 
 element('guide-skip').addEventListener('click', async () => {
   try { await api.guideSkip(); } catch {}
@@ -113,5 +130,6 @@ element('guide-next').addEventListener('click', async () => {
 document.addEventListener('keydown', event => {
   if (event.key !== 'Escape') return;
   if (currentData.kind === 'guide') { api.guideSkip().catch(() => {}).then(() => api.hidePopover()); return; }
+  if (currentData.kind === 'update') { answerUpdate(false); return; }
   api.notchInteraction({ type: 'escape' }).then(() => api.hidePopover());
 });

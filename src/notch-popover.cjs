@@ -77,13 +77,14 @@ function createNotchPopover({ BrowserWindow, screen, preload, onWindow, onPresen
 
   function show(request) {
     const target = ensure();
-    const kind = ['status', 'guide'].includes(request.kind) ? request.kind : 'tooltip';
+    const kind = ['status', 'guide', 'update'].includes(request.kind) ? request.kind : 'tooltip';
     const size = kind === 'status' ? { width: 280, height: 176 }
       : kind === 'guide' ? (request.guide?.kind === 'password-offer' ? { width: 330, height: 372 } : { width: 330, height: 216 })
+        : kind === 'update' ? { width: 330, height: 196 }
         : { width: 220, height: 52 };
     const workArea = screen.getDisplayMatching(request.notchBounds).workArea;
     const bounds = placePopover(request.notchBounds, request.anchor, size, workArea, request.edge);
-    const data = { kind, label: String(request.label || '').slice(0, 80), status: request.status || null, edge: request.edge, guide: request.guide || null };
+    const data = { kind, label: String(request.label || '').slice(0, 80), status: request.status || null, edge: request.edge, guide: request.guide || null, update: request.update || null };
     pending = { data, bounds };
     target.setBounds(bounds, false);
     if (typeof target.setShape === 'function') target.setShape(popupShape(size, request.edge));

@@ -45,27 +45,65 @@ test('portable copy ignores a non-GitHub page link and stays calm offline', asyn
   assert.match(state.message, /인터넷/);
 });
 
-test('installed copy downloads in the background and installs only on request', async () => {
+test('installed copy asks first: nothing downloads until download(), nothing installs until install()', async () => {
   const fake = new EventEmitter();
+  let downloads = 0;
   let installed = null;
-  fake.checkForUpdates = async () => {
-    fake.emit('checking-for-update');
-    fake.emit('update-available', { version: '1.1.0' });
+  fake.checkForUpdates = async () => { fake.emit('checking-for-update'); fake.emit('update-available', { version: '1.1.0' }); };
+  fake.downloadUpdate = async () => {
+    downloads += 1;
     fake.emit('download-progress', { percent: 42.4 });
     fake.emit('update-downloaded', { version: '1.1.0' });
   };
   fake.quitAndInstall = (silent, relaunch) => { installed = { silent, relaunch }; };
   const phases = [];
   const updater = createUpdater({ app: app(true, '1.0.0'), repository, env: {}, loadAutoUpdater: () => fake, onChange: state => phases.push(state.phase) });
-  assert.equal(updater.install(), false, 'nothing to install before a download');
-  const state = await updater.check();
-  assert.equal(fake.autoDownload, true);
+  const found = await updater.check();
+  assert.equal(fake.autoDownload, false, 'electron-updater must not download on its own');
   assert.equal(fake.autoInstallOnAppQuit, true);
-  assert.equal(state.phase, 'ready');
-  assert.deepEqual([...new Set(phases)], ['checking', 'downloading', 'ready']);
+  assert.equal(found.phase, 'available');
+  assert.equal(found.available, '1.1.0');
+  assert.equal(downloads, 0);
+  assert.equal(updater.install(), false, 'nothing to install before a download');
+
+  // A later periodic check while the question is still open keeps the same offer.
+  assert.equal((await updater.check()).phase, 'available');
+
+  assert.equal(await updater.download(), true);
+  assert.equal(downloads, 1);
+  assert.equal(updater.state.phase, 'ready');
+  assert.equal(await updater.download(), false, 'no second download once ready');
+  assert.deepEqual([...new Set(phases)], ['checking', 'available', 'downloading', 'ready']);
   assert.equal(updater.install(), true);
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(installed, { silent: true, relaunch: true });
+});
+
+test('a failed download is reported and the offer can be retried by checking again', async () => {
+  const fake = new EventEmitter();
+  fake.checkForUpdates = async () => { fake.emit('update-available', { version: '1.1.0' }); };
+  fake.downloadUpdate = async () => { throw new Error('net::ERR_CONNECTION_RESET'); };
+  const updater = createUpdater({ app: app(true, '1.0.0'), repository, env: {}, loadAutoUpdater: () => fake });
+  await updater.check();
+  assert.equal(await updater.download(), false);
+  assert.equal(updater.state.phase, 'error');
+  assert.match(updater.state.message, /인터넷/);
+  assert.equal((await updater.check()).phase, 'available');
+});
+
+test('updates are checked every 15 minutes and the widget asks before downloading and before installing', () => {
+  const fs = require('node:fs');
+  const source = fs.readFileSync('src/updater.cjs', 'utf8');
+  assert.match(source, /const CHECK_INTERVAL_MS = 15 \* 60 \* 1000;/);
+  const main = fs.readFileSync('src/main.cjs', 'utf8');
+  assert.doesNotMatch(main, /showMessageBox/, 'asked in the widget popover, not a system dialog');
+  assert.match(main, /popover\.show\(\{ kind: 'update'/);
+  assert.match(main, /if \(automation\?\.busy \|\| guide \|\|/, 'never interrupts a login or the guide');
+  assert.match(main, /if \(answer\.accepted !== true\) return \{ ok: true, accepted: false \};/, 'only an explicit yes acts');
+  assert.match(main, /if \(updateQuestion && request\.kind === 'tooltip'\) return/);
+  const popup = fs.readFileSync('renderer/popup.js', 'utf8');
+  assert.match(popup, /element\('update-yes'\)\.addEventListener\('click', \(\) => answerUpdate\(true\)\)/);
+  assert.match(popup, /if \(currentData\.kind === 'update'\) \{ answerUpdate\(false\); return; \}/, 'Escape means later');
 });
 
 test('release config publishes both exe targets to GitHub', () => {

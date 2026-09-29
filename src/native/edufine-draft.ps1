@@ -975,6 +975,26 @@ public static class DraftWindowActivation {
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, IntPtr pid);
   [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint from, uint to, bool attach);
   [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+  // True when the teacher has moved on to another program while a task was running. A window
+  // is only ever raised while they are still in Edge, the widget or a 기안창 (or on the bare
+  // desktop); otherwise the task finishes quietly behind their work.
+  [DllImport("user32.dll", EntryPoint = "GetWindowThreadProcessId")] public static extern uint GetWindowThreadProcessIdOut(IntPtr hwnd, out uint pid);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassNameW(IntPtr hWnd, System.Text.StringBuilder name, int size);
+  public static bool UserElsewhere() {
+      IntPtr fg = GetForegroundWindow();
+      if (fg == IntPtr.Zero) return false;
+      uint pid = 0;
+      GetWindowThreadProcessIdOut(fg, out pid);
+      string name;
+      try { name = System.Diagnostics.Process.GetProcessById((int)pid).ProcessName; } catch { return false; }
+      foreach (string ours in new[] { "msedge", "EduDock", "electron", "WXSClient" }) {
+          if (string.Equals(name, ours, StringComparison.OrdinalIgnoreCase)) return false;
+      }
+      System.Text.StringBuilder cls = new System.Text.StringBuilder(64);
+      GetClassNameW(fg, cls, 64);
+      string c = cls.ToString();
+      return !(c == "Progman" || c == "WorkerW" || c == "Shell_TrayWnd" || c == "Shell_SecondaryTrayWnd");
+  }
   // A helper spawned in the background is not the foreground process, so Windows ignores a bare
   // SetForegroundWindow. Attaching to the current foreground thread's input queue lifts that lock.
   public static bool Activate(IntPtr hwnd) {
@@ -994,7 +1014,10 @@ public static class DraftWindowActivation {
 }
 '@
             }
-            $focused = [DraftWindowActivation]::Activate([IntPtr][int64]$matches[0].hwnd)
+            # Raised only while the teacher is still with Edge, the widget or a 기안창; if they have
+            # moved on, the window stays put (Windows blinks it in the taskbar) and is reported unfocused.
+            if ([DraftWindowActivation]::UserElsewhere()) { $focused = $false; $result.userElsewhere = $true }
+            else { $focused = [DraftWindowActivation]::Activate([IntPtr][int64]$matches[0].hwnd) }
         }
         $result.focused = $focused
         Write-Result $result

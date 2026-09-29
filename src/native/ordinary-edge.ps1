@@ -470,6 +470,27 @@ public static class OrdinaryEdgeNativeV1 {
     [StructLayout(LayoutKind.Explicit, Size = 40)] public struct INPUT { [FieldOffset(0)] public uint type; [FieldOffset(8)] public KEYBDINPUT ki; }
     [DllImport("user32.dll")] public static extern uint SendInput(uint count, INPUT[] inputs, int size);
 
+
+    // True when the teacher has moved on to another program while a task was running. A window
+    // is only ever raised while they are still in Edge, the widget or a 기안창 (or on the bare
+    // desktop); otherwise the task finishes quietly behind their work.
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassNameW(IntPtr hWnd, System.Text.StringBuilder name, int size);
+    public static bool UserElsewhere() {
+        IntPtr fg = GetForegroundWindow();
+        if (fg == IntPtr.Zero) return false;
+        uint pid = 0;
+        GetWindowThreadProcessId(fg, out pid);
+        string name;
+        try { name = System.Diagnostics.Process.GetProcessById((int)pid).ProcessName; } catch { return false; }
+        foreach (string ours in new[] { "msedge", "EduDock", "electron", "WXSClient" }) {
+            if (string.Equals(name, ours, StringComparison.OrdinalIgnoreCase)) return false;
+        }
+        System.Text.StringBuilder cls = new System.Text.StringBuilder(64);
+        GetClassNameW(fg, cls, 64);
+        string c = cls.ToString();
+        return !(c == "Progman" || c == "WorkerW" || c == "Shell_TrayWnd" || c == "Shell_SecondaryTrayWnd");
+    }
+
     // A background helper is not the foreground process, so Windows ignores a bare
     // SetForegroundWindow; attaching to the current foreground thread lifts that lock.
     public static bool Activate(IntPtr hWnd) {
@@ -849,7 +870,7 @@ try {
         # A background helper cannot raise a window with a bare SetForegroundWindow; Activate
         # attaches to the foreground thread first. Its outcome is reported (window.foreground),
         # never required: the user working in another window must not break the task.
-        $null = [OrdinaryEdgeNativeV1]::Activate($targetHandle)
+        if (-not [OrdinaryEdgeNativeV1]::UserElsewhere()) { $null = [OrdinaryEdgeNativeV1]::Activate($targetHandle) }
         # Switching an Edge tab is asynchronous: the address bar still reported the previous
         # tab's page when it was read once, 150 ms after the click, and a perfectly good switch
         # came back 'unavailable'. Give the browser a moment, re-reading until it agrees.

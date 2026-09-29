@@ -208,7 +208,7 @@ function renderUpdate(update, version) {
   bar.hidden = phase !== 'downloading';
   element('update-progress-bar').style.width = `${Math.max(4, Math.min(100, update.progress || 0))}%`;
   button.hidden = phase === 'downloading' || phase === 'checking';
-  button.dataset.action = phase === 'ready' ? 'install' : phase === 'available' ? 'page' : 'check';
+  button.dataset.action = phase === 'ready' ? 'install' : phase === 'available' ? (update.mode === 'portable' ? 'page' : 'download') : 'check';
   button.textContent = phase === 'ready' ? '재시작하여 설치' : phase === 'available' ? '내려받기' : '업데이트 확인';
   button.className = phase === 'ready' || phase === 'available' ? 'primary small' : 'secondary small';
 }
@@ -218,7 +218,8 @@ element('update-action').addEventListener('click', async () => {
     if (action === 'install') {
       status('앱을 닫고 새 버전을 설치해요. 잠시 뒤 자동으로 다시 열려요.', 'opening', true);
       await invoke('updateInstall');
-    } else if (action === 'page') await invoke('updateOpenPage');
+    } else if (action === 'download') await invoke('updateDownload');
+    else if (action === 'page') await invoke('updateOpenPage');
     else await invoke('updateCheck');
   } catch (error) { report(error); }
 });

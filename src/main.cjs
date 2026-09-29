@@ -24,7 +24,8 @@ let automation;
 let popover;
 let placementGuide;
 let updater;
-let updateNotified = null;
+const updateAnswered = { available: null, ready: null };
+let updateQuestion = null;
 let popoverHideTimer;
 let quitting = false;
 const roles = new Map();
@@ -296,7 +297,9 @@ function buildTrayMenu() {
     { label: '위젯 위치', submenu: placementItems() },
     updater?.state.phase === 'ready'
       ? { label: `재시작하여 새 버전 ${updater.state.available || ''} 설치`, click: installUpdate }
-      : { label: '업데이트 확인', enabled: updater?.state.mode !== 'development', click: () => { showAuxiliary('settings'); void updater?.check(); } },
+      : updater?.state.phase === 'available'
+        ? { label: `새 버전 ${updater.state.available || ''} 내려받기`, click: () => { if (updater.state.mode === 'portable') updater.openReleasePage(); else void updater.download(); } }
+        : { label: '업데이트 확인', enabled: Boolean(updater) && updater.state.mode !== 'development', click: () => { showAuxiliary('settings'); void updater?.check(); } },
     { type: 'separator' },
     { label: '종료', click: () => { quitting = true; app.quit(); } },
   ]);
@@ -319,12 +322,47 @@ function installUpdate() {
   return { ok: updater.install() };
 }
 
-// One Windows notification per downloaded version, so the teacher learns about it without
-// opening settings; installing still waits for them.
-function announceUpdate(update) {
-  if (update.phase !== 'ready' || !update.available || updateNotified === update.available) return;
-  updateNotified = update.available;
-  try { tray?.displayBalloon({ title: '업무포털 도우미 업데이트', content: `새 버전 ${update.available}이 준비됐어요. 설정에서 재시작하거나, 다음에 종료할 때 설치됩니다.`, iconType: 'info' }); } catch {}
+// Asks before downloading and again before installing, in the widget's own popover (same frame
+// as the guide), once per version per run: "나중에" is respected until the next launch, and
+// settings can still start either step. The question only ever acts on one of its two buttons.
+// It never interrupts a login, a screen move or the guide; it waits until the widget is idle.
+function promptForUpdate(update) {
+  const step = update?.phase === 'available' ? 'available' : update?.phase === 'ready' ? 'ready' : null;
+  if (!step || !update.available || updateAnswered[step] === update.available) return;
+  if (updateQuestion?.step === step && updateQuestion.version === update.available) return;
+  if (automation?.busy || guide || !notch?.window || notch.window.isDestroyed() || !notch.window.isVisible()) {
+    const retry = setTimeout(() => promptForUpdate(updater?.state), 10000);
+    retry.unref?.();
+    return;
+  }
+  const portable = update.mode === 'portable';
+  const question = step === 'available'
+    ? {
+      body: portable
+        ? `새 버전 ${update.available}이 나왔어요.
+포터블 버전은 새 exe를 받아 바꿔 써야 해요. 내려받기 페이지를 열까요?`
+        : `새 버전 ${update.available}이 나왔어요.
+지금 내려받을까요? 받는 동안에도 계속 쓸 수 있어요.`,
+      yes: portable ? '페이지 열기' : '지금 내려받기',
+    }
+    : { body: `새 버전 ${update.available}을 받았어요.
+지금 재시작해서 설치할까요? "나중에"를 누르면 종료할 때 설치돼요.`, yes: '지금 재시작' };
+  updateQuestion = { step, version: update.available, portable };
+  const bounds = notch.window.getBounds();
+  clearTimeout(popoverHideTimer);
+  popover.show({ kind: 'update', label: '업데이트', anchor: bounds, notchBounds: bounds, edge: settings.placement.edge, focus: true, update: { step, no: '나중에', ...question } });
+}
+
+function answerUpdate(answer) {
+  const question = updateQuestion;
+  updateQuestion = null;
+  if (!question || answer?.step !== question.step) return { ok: false };
+  updateAnswered[question.step] = question.version;
+  if (answer.accepted !== true) return { ok: true, accepted: false };
+  if (question.step === 'ready') installUpdate();
+  else if (question.portable) void updater?.openReleasePage();
+  else void updater?.download();
+  return { ok: true, accepted: true };
 }
 
 function commitPlacement(placement) {
@@ -459,6 +497,8 @@ app.whenReady().then(() => {
       { label: '펼친 채로 고정', type: 'checkbox', checked: Boolean(notch.interaction?.pinned), click: () => notch.dispatch('pin') },
       { label: '설정 열기', click: () => showAuxiliary('settings') },
       { label: '노치 숨기기', click: hideNotch },
+      { type: 'separator' },
+      { label: '종료', click: () => { quitting = true; app.quit(); } },
     ]);
     // The notch stays open while the menu is up, as it does for its own popovers.
     notch.dispatch('popup', true);
@@ -471,6 +511,10 @@ app.whenReady().then(() => {
   });
   handle('show-popover', ['notch'], request => {
     if (!request || !['tooltip', 'status', 'guide'].includes(request.kind)) throw new Error('팝오버 요청이 올바르지 않습니다.');
+    // Hover tooltips never cover an unanswered update question; a deliberate status click may,
+    // and then the question is asked again on the next check.
+    if (updateQuestion && request.kind === 'tooltip') return { ok: false, reason: 'update-question-open' };
+    updateQuestion = null;
     const anchor = request.anchor;
     if (!anchor || !['x', 'y', 'width', 'height'].every(key => Number.isFinite(anchor[key]))) throw new Error('팝오버 위치가 올바르지 않습니다.');
     clearTimeout(popoverHideTimer);
@@ -566,6 +610,8 @@ app.whenReady().then(() => {
     return { ok: true, message: '초안을 파일로 저장했습니다.' };
   });
   handle('update-check', ['auxiliary'], () => updater?.check() ?? null);
+  handle('update-download', ['auxiliary'], () => updater?.download() ?? false);
+  handle('update-answer', ['popover'], answerUpdate);
   handle('update-install', ['auxiliary'], () => installUpdate());
   handle('update-open-page', ['auxiliary'], () => updater?.openReleasePage());
   handle('diagnostics', ['auxiliary'], () => {
@@ -586,9 +632,11 @@ app.whenReady().then(() => {
       net,
       repository: RELEASE_REPOSITORY,
       loadAutoUpdater: () => require('electron-updater').autoUpdater,
-      onChange: update => { announceUpdate(update); publish(); },
+      onChange: update => { promptForUpdate(update); publish(); },
     });
     updater.start();
+    // Waking from sleep or unlocking is when a PC left on overnight most likely missed a release.
+    for (const event of ['resume', 'unlock-screen']) powerMonitor.on(event, () => { void updater?.check(); });
   } catch (error) {
     updater = null;
     console.error('updater unavailable', error);

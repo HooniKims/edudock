@@ -2,8 +2,8 @@
 
 // Updates come from the project's GitHub Releases.
 //
-// - Installed copy (NSIS): electron-updater downloads the new installer in the background and
-//   installs it when the app quits, or right away when the teacher presses "재시작하여 설치".
+// - Installed copy (NSIS): a new version is announced and downloaded only when the teacher agrees;
+//   it installs when they press "재시작하여 설치" or, failing that, when the app next quits.
 // - Portable copy: it cannot replace its own running exe, so it only checks the latest release
 //   and offers the download page.
 // - Development (not packaged): updates are off.
@@ -17,7 +17,7 @@
 const RELEASE_REPOSITORY = Object.freeze({ owner: 'HooniKims', repo: 'edudock' });
 
 const CHECK_DELAY_MS = 15 * 1000;
-const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const CHECK_INTERVAL_MS = 15 * 60 * 1000;
 
 function parseVersion(value) {
   const match = /^v?(\d+)\.(\d+)\.(\d+)/.exec(String(value || '').trim());
@@ -60,13 +60,13 @@ function createUpdater({ app, shell, net, repository, env = process.env, loadAut
   function installedUpdater() {
     if (autoUpdater) return autoUpdater;
     autoUpdater = loadAutoUpdater();
-    autoUpdater.autoDownload = true;
+    autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = true;
     autoUpdater.allowPrerelease = false;
     autoUpdater.logger = null;
     autoUpdater.on('checking-for-update', () => set({ phase: 'checking', message: '새 버전을 확인하고 있어요.' }));
     autoUpdater.on('update-not-available', () => set({ phase: 'latest', available: null, message: '최신 버전을 쓰고 있어요.', checkedAt: now() }));
-    autoUpdater.on('update-available', info => set({ phase: 'downloading', available: info?.version || null, progress: 0, message: `새 버전 ${info?.version || ''}을 내려받고 있어요.`.replace('  ', ' '), checkedAt: now() }));
+    autoUpdater.on('update-available', info => set({ phase: 'available', available: info?.version || null, progress: null, message: `새 버전 ${info?.version || ''}이 나왔어요. 내려받을 수 있어요.`, checkedAt: now() }));
     autoUpdater.on('download-progress', progress => set({ phase: 'downloading', progress: Math.round(progress?.percent || 0) }));
     autoUpdater.on('update-downloaded', info => set({ phase: 'ready', available: info?.version || state.available, progress: 100, message: `새 버전 ${info?.version || ''}이 준비됐어요. 재시작하면 설치돼요. 그냥 종료해도 다음 실행 전에 설치됩니다.` }));
     autoUpdater.on('error', error => set({ phase: 'error', progress: null, message: friendly(error), checkedAt: now() }));
@@ -86,6 +86,7 @@ function createUpdater({ app, shell, net, repository, env = process.env, loadAut
 
   function check() {
     if (mode === 'development') return Promise.resolve(snapshot());
+    // Once a version is being fetched or waiting to install there is nothing newer to ask about.
     if (state.phase === 'ready' || state.phase === 'downloading') return Promise.resolve(snapshot());
     if (checking) return checking;
     const run = mode === 'portable' ? checkPortable() : installedUpdater().checkForUpdates();
@@ -110,6 +111,16 @@ function createUpdater({ app, shell, net, repository, env = process.env, loadAut
     timers = [];
   }
 
+  // Starts the download the teacher agreed to. Only the installed copy downloads by itself; the
+  // portable copy is replaced by hand from the release page.
+  function download() {
+    if (mode !== 'installed' || state.phase !== 'available' || !autoUpdater) return Promise.resolve(false);
+    set({ phase: 'downloading', progress: 0, message: `새 버전 ${state.available || ''}을 내려받고 있어요.` });
+    return Promise.resolve(autoUpdater.downloadUpdate())
+      .then(() => true)
+      .catch(error => { set({ phase: 'error', progress: null, message: friendly(error), checkedAt: now() }); return false; });
+  }
+
   // The caller marks the app as quitting first so windows that normally hide on close let go.
   function install() {
     if (mode !== 'installed' || state.phase !== 'ready' || !autoUpdater) return false;
@@ -121,7 +132,7 @@ function createUpdater({ app, shell, net, repository, env = process.env, loadAut
     return shell.openExternal(state.releaseUrl || releasesUrl);
   }
 
-  return { start, stop, check, install, openReleasePage, get state() { return snapshot(); } };
+  return { start, stop, check, download, install, openReleasePage, get state() { return snapshot(); } };
 }
 
 module.exports = { createUpdater, isNewer, parseVersion, RELEASE_REPOSITORY };

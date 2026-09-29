@@ -46,3 +46,10 @@ body[data-kind="guide"] .guide-actions button{font-size:13px;padding:8px 14px}
 /* Author's signature, shown on every step of the first-run guide. */
 #guide .signature{position:absolute;top:6px;right:16px;margin:0;font:400 23px/1 'Great Vibes',cursive;letter-spacing:.2px;background:linear-gradient(100deg,#9cc2ff,#e7d3ff);-webkit-background-clip:text;background-clip:text;color:transparent;pointer-events:none;user-select:none}
 body[data-kind="guide"] #label{padding-right:118px}
+
+/* Update question: same frame as a guide step. */
+body[data-kind="update"] #panel{display:flex;flex-direction:column;gap:10px;overflow:hidden}
+body[data-kind="update"] #label{color:#76acff;font-size:13px}
+#update{display:flex;flex-direction:column;gap:10px;flex:1;min-height:0}
+#update[hidden]{display:none}
+#update-body{margin:0;color:#c8c8d0;line-height:1.55;overflow-wrap:anywhere;white-space:pre-line}

@@ -570,7 +570,8 @@ class OrdinaryEdgeAdapter {
           throw translateDraftHandoffError(error);
         }
       }
-      return { verified: true, system: 'edufine', editorReused: result.reused === true, drafted };
+      // raised:false means the 기안창 opened but stayed behind the teacher's other work.
+      return { verified: true, system: 'edufine', editorReused: result.reused === true, drafted, raised: result.focused !== false };
     }
     return { verified: !deepActionUnsupported, system, deepActionUnsupported };
   }

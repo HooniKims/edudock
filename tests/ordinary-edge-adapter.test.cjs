@@ -434,7 +434,8 @@ test('draft opens the coordinator exactly once only after verified K-EdYouFine l
   const op = { ...operation(), action: 'draft' };
   await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', op);
   assert.equal(await adapter.observeAuthenticated(op), true);
-  assert.deepEqual(await adapter.resumeAction('draft', op), { verified: true, system: 'edufine', editorReused: false, drafted: false });
+  // The fake helper never reports the new window as raised, so the result says it stayed behind.
+  assert.deepEqual(await adapter.resumeAction('draft', op), { verified: true, system: 'edufine', editorReused: false, drafted: false, raised: false });
   assert.deepEqual(coordinatorCalls.slice(0, 3), ['inspect-editors', 'open-public-form', 'inspect-editors']);
   await assert.rejects(adapter.resumeAction('draft', op), /already resumed/i);
 });
@@ -481,7 +482,9 @@ test('a generated draft is written into a form the product just opened, and only
   const fills = besideCalls.filter(call => call.command === 'fill-draft');
   assert.equal(fills.length, 1);
   assert.equal(fills[0].target, `${fresh.pid}|${fresh.processStartedAt}|${fresh.hwnd}`, 'only the new window is written into');
-  assert.equal(besideCalls.some(call => call.command === 'focus-editor'), false);
+  // The new window is raised so the teacher sees it; the existing one is never raised.
+  const raised = besideCalls.filter(call => call.command === 'focus-editor');
+  assert.deepEqual(raised.map(call => call.target), [`${fresh.pid}|${fresh.processStartedAt}|${fresh.hwnd}`]);
 
   // Opening the menu without a draft still just opens it.
   assert.equal((await resume({ open: async () => ({ editor, reused: false, autosave: 'none' }), fill: async () => { throw new Error('must not fill'); } }, {})).drafted, false);
@@ -889,7 +892,8 @@ test('a teacher already working inside K-EdYouFine counts as logged in, and the 
   const op = { ...operation(), action: 'draft' };
   await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', op);
   assert.equal(await adapter.observeAuthenticated(op), true, 'inside K-에듀파인 is proof of login');
-  assert.deepEqual(await adapter.resumeAction('draft', op), { verified: true, system: 'edufine', editorReused: false, drafted: false });
+  // The fake helper never reports the new window as raised, so the result says it stayed behind.
+  assert.deepEqual(await adapter.resumeAction('draft', op), { verified: true, system: 'edufine', editorReused: false, drafted: false, raised: false });
   assert.deepEqual(requests.filter(request => request.command === 'invoke').map(request => request.action), ['activate-system-tab']);
 });
 
