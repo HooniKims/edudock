@@ -240,6 +240,7 @@ class DraftHandoffCoordinator {
     // walk and OCR left almost no time for the editor to actually appear.
     const editorDeadline = this.#now() + this.#editorWaitMs;
     let unverified = null;
+    let raisedEarly = false;
     while (this.#now() <= editorDeadline) {
       await this.#pause(25);
       const observed = await this.#poll(operation, editorDeadline);
@@ -258,6 +259,9 @@ class DraftHandoffCoordinator {
       if (fresh.length > 1) throw new DraftHandoffError('ambiguous-editors', 'More than one new WXS editor appeared after the public form click');
       if (fresh.length === 1) {
         const fingerprint = publicFingerprint(fresh[0]);
+        // Shown the moment it appears, not after its notices are settled: the teacher sees the
+        // 기안창 come up right after the 공용서식 click instead of waiting several seconds.
+        if (!raisedEarly) { raisedEarly = true; await this.#raise(fresh[0], operation); }
         const settled = await this.#settleDialog(observed, operation, fingerprint);
         if (settled.editors.length !== 1) throw new DraftHandoffError('stale-editor', 'The editor disappeared while its dialog was open');
         // A window that has only just appeared has not finished taking its title and controls,
@@ -268,10 +272,10 @@ class DraftHandoffCoordinator {
         // and a write that had already started ran into that modal. Wait until no prompt has
         // shown for a moment before handing the window over.
         const quiet = await this.#awaitQuiet(fingerprint, operation, settled.autosave);
-        // The window this press opened is what the teacher asked to see. Launched by another
-        // process while the widget holds focus, it otherwise opens behind Edge and only blinks in
-        // the taskbar — which read as "the 기안창 never opened". Only this new window is raised;
-        // the teacher's other editors are never touched. Raising is best-effort, never a failure.
+        // Raised once more when it is ready: its notices may have pulled Edge back in front.
+        // Launched by another process while the widget holds focus, it otherwise opens behind
+        // Edge and only blinks in the taskbar — which read as "the 기안창 never opened". Only
+        // this new window is raised; the teacher's other editors are never touched.
         const focused = await this.#raise(quiet.editor, operation);
         return Object.freeze({ editor: quiet.editor, reused: false, autosave: quiet.autosave, focused });
       }

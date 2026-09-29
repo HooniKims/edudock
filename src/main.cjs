@@ -185,8 +185,12 @@ function createAuxiliaryWindow() {
   return auxiliary;
 }
 
-function showAuxiliary(view) {
+function showAuxiliary(view, section = null) {
   const target = view === 'settings' ? 'settings' : 'draft';
+  // Anything about an update opens settings on the update row itself; so does opening settings
+  // while an update is waiting to be fetched, fetched or installed.
+  const pending = ['available', 'downloading', 'ready'].includes(updater?.state.phase);
+  const focusSection = target === 'settings' ? (section || (pending ? 'update' : null)) : null;
   clearTimeout(popoverHideTimer);
   popover?.hide();
   notch?.dispatch('focus', false);
@@ -202,6 +206,7 @@ function showAuxiliary(view) {
       if (bounds.width < 640 || bounds.height < 480) window.setBounds(centeredBounds(960, 720));
     }
     window.webContents.send('aux-view', target);
+    if (focusSection) window.webContents.send('aux-section', focusSection);
     window.webContents.send('status', currentStatus);
     window.show();
     window.focus();
@@ -298,8 +303,8 @@ function buildTrayMenu() {
     updater?.state.phase === 'ready'
       ? { label: `재시작하여 새 버전 ${updater.state.available || ''} 설치`, click: installUpdate }
       : updater?.state.phase === 'available'
-        ? { label: `새 버전 ${updater.state.available || ''} 내려받기`, click: () => { if (updater.state.mode === 'portable') updater.openReleasePage(); else void updater.download(); } }
-        : { label: '업데이트 확인', enabled: Boolean(updater) && updater.state.mode !== 'development', click: () => { showAuxiliary('settings'); void updater?.check(); } },
+        ? { label: `새 버전 ${updater.state.available || ''} 내려받기`, click: () => { if (updater.state.mode === 'portable') updater.openReleasePage(); else { showAuxiliary('settings', 'update'); void updater.download(); } } }
+        : { label: '업데이트 확인', enabled: Boolean(updater) && updater.state.mode !== 'development', click: () => { showAuxiliary('settings', 'update'); void updater?.check(); } },
     { type: 'separator' },
     { label: '종료', click: () => { quitting = true; app.quit(); } },
   ]);
@@ -361,7 +366,7 @@ function answerUpdate(answer) {
   if (answer.accepted !== true) return { ok: true, accepted: false };
   if (question.step === 'ready') installUpdate();
   else if (question.portable) void updater?.openReleasePage();
-  else void updater?.download();
+  else { showAuxiliary('settings', 'update'); void updater?.download(); }
   return { ok: true, accepted: true };
 }
 

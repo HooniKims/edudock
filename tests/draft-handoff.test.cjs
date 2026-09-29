@@ -320,7 +320,8 @@ test('the autosave prompt is declined with 취소 and the handoff then continues
   const calls = [];
   const responses = [reply([]), reply([], { invoked: true }), reply([blocked]), reply([blocked], { invoked: true }), reply([clear])];
   const coordinator = new DraftHandoffCoordinator({
-    runNative: async request => { calls.push(request); return next(responses); },
+    // Raising the new window is answered on the side; it is not part of the scripted sequence.
+    runNative: async request => { if (request.command === 'focus-editor') return reply([blocked], { focused: true }); calls.push(request); return next(responses); },
     pause: async () => {}, dialogWaitMs: 5000,
   });
   const result = await coordinator.open(operation());
@@ -667,12 +668,24 @@ test('a non-transient helper failure during the wait is not retried away', async
   assert.equal(polls, 2, 'one look before the click, one after — no retry loop on malformed output');
 });
 
-test('the new 기안창 is raised only while the teacher is still with the task, never over other work', () => {
+test('the new 기안창 is always raised — the moment it appears and again when ready — and only it', async () => {
   const fs = require('node:fs');
   const draftHelper = fs.readFileSync(require('node:path').join(__dirname, '..', 'src', 'native', 'edufine-draft.ps1'), 'utf8');
-  assert.match(draftHelper, /if \(\[DraftWindowActivation\]::UserElsewhere\(\)\) \{ \$focused = \$false/);
+  assert.doesNotMatch(draftHelper, /UserElsewhere/, 'the 기안 button always shows its window');
   const edgeHelper = fs.readFileSync(require('node:path').join(__dirname, '..', 'src', 'native', 'ordinary-edge.ps1'), 'utf8');
-  assert.match(edgeHelper, /if \(-not \[OrdinaryEdgeNativeV1\]::UserElsewhere\(\)\) \{ \$null = \[OrdinaryEdgeNativeV1\]::Activate\(\$targetHandle\) \}/);
-  const portal = fs.readFileSync(require('node:path').join(__dirname, '..', 'src', 'portal.cjs'), 'utf8');
-  assert.match(portal, /resumed\.raised === false \? ' 다른 작업을 방해하지 않도록 뒤에 열어 두었어요/);
+  assert.match(edgeHelper, /if \(-not \[OrdinaryEdgeNativeV1\]::UserElsewhere\(\)\) \{ \$null = \[OrdinaryEdgeNativeV1\]::Activate\(\$targetHandle\) \}/, 'mid-flow Edge tab switches still do not steal focus');
+  const calls = [];
+  const existing = editor();
+  const fresh = editor({ pid: 11704, hwnd: '5551', processStartedAt: '2026-09-22T02:20:00.0000000Z' });
+  const responses = [reply([existing]), reply([existing], { invoked: true, entry: { selector: 'ocr', caption: EXPECTED_FORM_CAPTION } }), reply([existing]), reply([existing, fresh])];
+  const coordinator = new DraftHandoffCoordinator({ runNative: async request => { calls.push(request); return request.command === 'focus-editor' ? reply([existing, fresh], { focused: true }) : next(responses); }, pause: async () => {}, timeoutMs: 100 });
+  const result = await coordinator.open(operation());
+  const raised = calls.filter(call => call.command === 'focus-editor');
+  const target = `${fresh.pid}|${fresh.processStartedAt}|${fresh.hwnd}`;
+  assert.equal(raised.length, 2, 'once when it appears, once when ready');
+  assert.ok(raised.every(call => call.target === target));
+  const firstRaise = calls.findIndex(call => call.command === 'focus-editor');
+  const firstSeen = calls.findIndex((call, index) => index > 1 && call.command === 'inspect-editors') ;
+  assert.ok(firstRaise > firstSeen && firstRaise < calls.length - 1, 'raised before the settling polls finish');
+  assert.equal(result.focused, true);
 });

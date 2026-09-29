@@ -224,6 +224,20 @@ element('update-action').addEventListener('click', async () => {
   } catch (error) { report(error); }
 });
 
+// Brings one settings row into view and briefly marks it, e.g. the update row when an update
+// is being fetched. Runs after showView, which resets the scroll to the top.
+function focusSection(name) {
+  const target = { update: 'update-row' }[name];
+  const row = target && element(target);
+  if (!row) return;
+  requestAnimationFrame(() => {
+    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    row.classList.remove('spotlight');
+    void row.offsetWidth;
+    row.classList.add('spotlight');
+  });
+}
+
 const EDGE_NAMES = { top: '위', right: '오른쪽', bottom: '아래', left: '왼쪽' };
 // Monitors are drawn in their real arrangement, so "the left screen" is simply the one on the left.
 function renderMonitorMap(next) {
@@ -434,6 +448,7 @@ async function initialize() {
     if (typeof api.onState === 'function') api.onState(renderState);
     if (typeof api.onStatus === 'function') api.onStatus((update) => status(update.message, update.phase, Boolean(update.busy)));
     if (isAuxiliary && typeof api.onAuxView === 'function') api.onAuxView(showView);
+    if (isAuxiliary && typeof api.onAuxSection === 'function') api.onAuxSection(focusSection);
   } catch (error) { report(error); }
 }
 initialize();

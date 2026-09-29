@@ -138,3 +138,5 @@ h1,.greeting h1,.brand{font-family:Paperlogy,'Malgun Gothic',sans-serif}
 .credit-maker{margin:4px 0 0;font-size:12.5px;color:var(--secondary)}
 .credit .version{margin-top:4px}
 .brand-mark img{width:28px;height:28px;display:block}
+@keyframes spotlight{0%{background:rgba(35,97,206,.16);box-shadow:0 0 0 2px rgba(35,97,206,.45)}100%{background:transparent;box-shadow:0 0 0 2px transparent}}
+.settings-card .setting-row.spotlight{animation:spotlight 2.4s ease-out;border-radius:10px;margin-inline:-8px;padding-inline:8px}

@@ -68,13 +68,14 @@ const relative = file => path.relative(root, file).replaceAll('\\', '/');
     // One look before, one click, then polling until the new window has been quiet for a moment.
     assert.deepEqual(draftRequests.slice(0, 3), ['inspect-editors', 'open-public-form', 'inspect-editors']);
     // ...and finally the one new window is raised so the teacher sees it.
-    assert.ok(draftRequests.slice(3, -1).every(command => command === 'inspect-editors'), JSON.stringify(draftRequests));
+    // The new window is raised as soon as it appears and once more when ready.
+    assert.ok(draftRequests.slice(3, -1).every(command => ['inspect-editors', 'focus-editor'].includes(command)), JSON.stringify(draftRequests));
     assert.equal(draftRequests.at(-1), 'focus-editor', JSON.stringify(draftRequests));
     const raised = finalRecords.filter(record => record.kind === 'native-draft' && record.request.command === 'focus-editor');
     const before = finalRecords.find(record => record.kind === 'native-draft' && record.request.command === 'inspect-editors');
     const existingTargets = new Set((before?.response?.editors || []).map(item => `${item.pid}|${item.processStartedAt}|${item.hwnd}`));
-    assert.equal(raised.length, 1);
-    assert.equal(existingTargets.has(raised[0].request.target), false, 'the existing window is left alone');
+    assert.equal(raised.length, 2);
+    assert.ok(raised.every(record => !existingTargets.has(record.request.target)), 'the existing window is left alone');
     report.observable.draft = { phases: draftPhases, editorReused: false, nativeRequests: draftRequests, publicFormInvocations: draftRequests.filter(command => command === 'open-public-form').length };
     // A carried draft is written into the window this very operation opened \u2014 never into the
     // one the teacher already had. The fake helper only accepts a write to the newest editor.

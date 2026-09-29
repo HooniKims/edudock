@@ -174,7 +174,7 @@ class PortalAutomation {
         if (id !== 'portal') this.statusFor(operation, 'navigating', `${menus[id]} 화면으로 이동하고 있습니다.`);
         const resumed = this.resumeAction ? await this.wait(operation, this.resumeAction(id, operation, { draft: options.draft ?? null })) : null;
         if (resumed?.verified === true) {
-          const behind = resumed.raised === false ? ' 다른 작업을 방해하지 않도록 뒤에 열어 두었어요. 작업 표시줄에서 기안창을 눌러 주세요.' : '';
+          const behind = resumed.raised === false ? ' 기안창이 뒤에 열렸다면 작업 표시줄에서 눌러 주세요.' : '';
           const message = (resumed.drafted === true ? '기안문에 초안을 넣었습니다. 내용을 확인하고 상신해 주세요.' : `${menus[id]} 화면을 확인했습니다.`) + behind;
           this.statusFor(operation, 'done', message, false);
           return { ok: true, phase: 'done', message, drafted: resumed.drafted === true };

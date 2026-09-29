@@ -133,3 +133,12 @@ test('a release that is not there yet is explained plainly, not as a failure', a
   assert.equal(state.message, '아직 받을 수 있는 새 버전이 없어요.');
   assert.equal(state.checkedAt, 1234);
 });
+
+test('update actions open settings scrolled to the update row', () => {
+  const fs = require('node:fs');
+  const main = fs.readFileSync('src/main.cjs', 'utf8');
+  assert.match(main, /else \{ showAuxiliary\('settings', 'update'\); void updater\?\.download\(\); \}/);
+  assert.match(main, /if \(focusSection\) window\.webContents\.send\('aux-section', focusSection\);/);
+  const renderer = fs.readFileSync('renderer/renderer.js', 'utf8');
+  assert.match(renderer, /row\.scrollIntoView\(\{ block: 'center'/);
+});

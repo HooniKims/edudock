@@ -15,7 +15,7 @@ contextBridge.exposeInMainWorld('portal', {
   guideSavePassword: invoke('guide-save-password'), clearPassword: invoke('clear-password'), savePassword: invoke('save-password'),
   updateCheck: invoke('update-check'), updateAnswer: invoke('update-answer'), updateDownload: invoke('update-download'), updateInstall: invoke('update-install'), updateOpenPage: invoke('update-open-page'),
   onStatus: callback => listen('status', callback), onState: callback => listen('state-update', callback),
-  onAuxView: callback => listen('aux-view', callback), onNotchShape: callback => listen('notch-shape', callback),
+  onAuxView: callback => listen('aux-view', callback), onAuxSection: callback => listen('aux-section', callback), onNotchShape: callback => listen('notch-shape', callback),
   onNotchAnimate: callback => listen('notch-animate', callback),
   onPopoverData: callback => listen('popover-data', callback), onNotchFocusFirst: callback => listen('notch-focus-first', callback),
   onGuideStep: callback => listen('guide-step', callback),

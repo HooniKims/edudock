@@ -484,7 +484,8 @@ test('a generated draft is written into a form the product just opened, and only
   assert.equal(fills[0].target, `${fresh.pid}|${fresh.processStartedAt}|${fresh.hwnd}`, 'only the new window is written into');
   // The new window is raised so the teacher sees it; the existing one is never raised.
   const raised = besideCalls.filter(call => call.command === 'focus-editor');
-  assert.deepEqual(raised.map(call => call.target), [`${fresh.pid}|${fresh.processStartedAt}|${fresh.hwnd}`]);
+  // Raised when it appears and again when ready — always the new window, never the existing one.
+  assert.deepEqual(raised.map(call => call.target), [`${fresh.pid}|${fresh.processStartedAt}|${fresh.hwnd}`, `${fresh.pid}|${fresh.processStartedAt}|${fresh.hwnd}`]);
 
   // Opening the menu without a draft still just opens it.
   assert.equal((await resume({ open: async () => ({ editor, reused: false, autosave: 'none' }), fill: async () => { throw new Error('must not fill'); } }, {})).drafted, false);
