@@ -34,7 +34,7 @@ function isNewer(candidate, current) {
   return false;
 }
 
-function createUpdater({ app, shell, net, repository, env = process.env, loadAutoUpdater, onChange, now = Date.now }) {
+function createUpdater({ app, shell, net, repository, env = process.env, loadAutoUpdater, onChange, now = Date.now, spawn = require('node:child_process').spawn }) {
   const mode = !app.isPackaged ? 'development' : env.PORTABLE_EXECUTABLE_DIR ? 'portable' : 'installed';
   const releasesUrl = `https://github.com/${repository.owner}/${repository.repo}/releases/latest`;
   let state = { mode, phase: mode === 'development' ? 'disabled' : 'idle', current: app.getVersion(), available: null, progress: null, message: '', checkedAt: null, releaseUrl: releasesUrl };
@@ -64,6 +64,19 @@ function createUpdater({ app, shell, net, repository, env = process.env, loadAut
     autoUpdater.autoInstallOnAppQuit = true;
     autoUpdater.allowPrerelease = false;
     autoUpdater.logger = null;
+    // electron-updater starts the installer — and, for an install under Program Files, its
+    // console helper elevate.exe — with `detached` but without `windowsHide`, so Windows opened a
+    // console window for it: a terminal flashed on screen after every update. Same launch, hidden.
+    if (typeof autoUpdater.spawnLog === 'function') {
+      autoUpdater.spawnLog = (cmd, args = [], childEnv = undefined, stdio = 'ignore') => new Promise((resolve, reject) => {
+        try {
+          const child = spawn(cmd, args, { stdio, env: childEnv, detached: true, windowsHide: true });
+          child.on('error', reject);
+          child.unref();
+          if (child.pid !== undefined) resolve(true);
+        } catch (error) { reject(error); }
+      });
+    }
     autoUpdater.on('checking-for-update', () => set({ phase: 'checking', message: '새 버전을 확인하고 있어요.' }));
     autoUpdater.on('update-not-available', () => set({ phase: 'latest', available: null, message: '최신 버전을 쓰고 있어요.', checkedAt: now() }));
     autoUpdater.on('update-available', info => set({ phase: 'available', available: info?.version || null, progress: null, message: `새 버전 ${info?.version || ''}이 나왔어요. 내려받을 수 있어요.`, checkedAt: now() }));

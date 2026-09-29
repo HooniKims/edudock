@@ -150,3 +150,18 @@ test('opening settings over IPC passes only the view name, never the IPC event',
   assert.match(main, /handle\('open-auxiliary', \['notch', 'auxiliary'\], view => showAuxiliary\(view\)\);/);
   assert.match(main, /const requested = typeof section === 'string' \? section : null;/);
 });
+
+test('the update installer (and elevate.exe for Program Files) is launched hidden, never in a console window', async () => {
+  const fake = new EventEmitter();
+  fake.checkForUpdates = async () => {};
+  fake.spawnLog = async () => { throw new Error('the original must be replaced'); };
+  const launches = [];
+  const spawn = (cmd, args, options) => { launches.push({ cmd, args, options }); const child = new EventEmitter(); child.pid = 42; child.unref = () => {}; return child; };
+  const updater = createUpdater({ app: app(true, '1.0.0'), repository, env: {}, loadAutoUpdater: () => fake, spawn });
+  await updater.check();
+  assert.equal(await fake.spawnLog('C:/Program Files/EduDock/resources/elevate.exe', ['setup.exe', '--updated', '/S']), true);
+  assert.equal(launches.length, 1);
+  assert.equal(launches[0].options.windowsHide, true);
+  assert.equal(launches[0].options.detached, true);
+  assert.deepEqual(launches[0].args, ['setup.exe', '--updated', '/S']);
+});
