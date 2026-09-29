@@ -932,19 +932,14 @@ try {
     }
     $neisActions = @('select-my-menu','expand-duty','select-attendance-tab','select-trip-tab','open-attendance','open-trip')
     if ($request.action -in $neisActions) {
+        # The window was evaluated a moment ago in this same call; reading all of Edge a second
+        # time only repeated that (about a second per 나이스 step). Invoke-NeisTaskAction still
+        # re-checks the window's identity and walks the page afresh right before pressing.
         $freshRaw = $evaluation.raw
         $freshPublic = $evaluation.public
-        if (-not $FixturePath) {
-            $freshWindows = @(Get-RealWindows | Where-Object {
-                [int64]$_.pid -eq [int64]$request.target.pid -and [string]$_.hwnd -ceq [string]$request.target.hwnd -and [string]$_.processStartedAt -ceq [string]$request.target.processStartedAt
-            })
-            if ($freshWindows.Count -ne 1) {
-                Write-BridgeJson (New-BridgeResult -Status 'stale' -Windows @() -Invoked $false)
-                exit 0
-            }
-            $freshRaw = $freshWindows[0]
-            $freshOrigin = Get-OriginEvidence -Window $freshRaw
-            $freshPublic = ConvertTo-PublicWindow -Window $freshRaw -OriginEvidence $freshOrigin
+        if ([int64]$freshRaw.pid -ne [int64]$request.target.pid -or [string]$freshRaw.hwnd -cne [string]$request.target.hwnd -or [string]$freshRaw.processStartedAt -cne [string]$request.target.processStartedAt) {
+            Write-BridgeJson (New-BridgeResult -Status 'stale' -Windows @() -Invoked $false)
+            exit 0
         }
         if ($freshPublic.origin -cne 'https://sen.neis.go.kr' -or $freshPublic.landing -cne 'neis' -or $null -eq $freshPublic.neisTaskState) {
             Write-BridgeJson (New-BridgeResult -Status 'unavailable' -Windows @($freshPublic) -Invoked $false)

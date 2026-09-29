@@ -18,7 +18,8 @@ test('official format preserves confirmed facts and appendix punctuation',()=>{
 test('missing facts are not invented and date/time validation rejects impossible values',()=>{
  const draft=generateDraft({kind:'official',title:'검토',purpose:'협의회를 개최합니다.'});
  assert.equal(draft.body,'1. 협의회를 개최합니다.  끝.');
- assert.ok(draft.warnings.includes('일시 미확정'));
+ assert.ok(draft.warnings.includes('관련 근거가 없어 관련 항목을 생략했습니다.'));
+ assert.ok(!draft.warnings.includes('일시 미확정'), 'the form no longer asks for a date');
  assert.throws(()=>dateLabel('2026-02-30'));
  assert.throws(()=>generateDraft({kind:'official',title:'검토',purpose:'협의',startTime:'15:00',endTime:'14:00'}));
 });

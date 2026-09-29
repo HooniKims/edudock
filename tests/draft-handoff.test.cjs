@@ -689,3 +689,23 @@ test('the new 기안창 is always raised — the moment it appears and again whe
   assert.ok(firstRaise > firstSeen && firstRaise < calls.length - 1, 'raised before the settling polls finish');
   assert.equal(result.focused, true);
 });
+
+test('writing waits for a 기안창 whose document is still loading, but never retries a real refusal', async () => {
+  const opened = { editor: editor(), reused: false, autosave: 'none' };
+  let fills = 0;
+  const loading = new DraftHandoffCoordinator({ pause: async () => {}, runNative: async request => {
+    if (request.command === 'inspect-editors') return reply([editor()]);
+    fills += 1;
+    return fills < 3 ? reply([editor()], { status: 'needs-user', reason: 'editor-document-unavailable' }) : reply([editor()], { filled: true });
+  } });
+  assert.equal((await loading.fill(opened, { title: '제목', body: '본문' }, operation())).filled, true);
+  assert.equal(fills, 3);
+  let refused = 0;
+  const notBlank = new DraftHandoffCoordinator({ pause: async () => {}, runNative: async request => {
+    if (request.command === 'inspect-editors') return reply([editor()]);
+    refused += 1;
+    return reply([editor()], { status: 'needs-user', reason: 'not-blank' });
+  } });
+  await assert.rejects(notBlank.fill(opened, { title: '제목', body: '본문' }, operation()));
+  assert.equal(refused, 1, 'a document that is not blank is never written into by retrying');
+});

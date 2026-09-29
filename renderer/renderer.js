@@ -336,6 +336,8 @@ element('draft-form').addEventListener('submit', async (event) => {
     element('draft-empty').hidden = true;
     element('draft-output').hidden = false;
     element('fill-draft').hidden = generatedKind !== 'official';
+    pickedDraftId = null;
+    renderSavedDrafts();
     const warnings = Array.isArray(result.warnings) ? result.warnings.filter(Boolean).join('\n') : '';
     element('draft-warnings').textContent = warnings;
     element('draft-warnings').hidden = !warnings;
@@ -348,12 +350,80 @@ element('draft-form').addEventListener('submit', async (event) => {
 });
 
 element('result-body').addEventListener('input', growResultBody);
+// ---- 저장한 초안: kept on this PC, picked later and put into a 기안창 ----
+let savedDrafts = [];
+let pickedDraftId = null;
+function savedDateLabel(iso) {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat('ko-KR', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(date);
+}
+function renderSavedDrafts() {
+  const list = element('saved-list');
+  list.replaceChildren(...savedDrafts.map((item) => {
+    const row = document.createElement('li');
+    const pick = document.createElement('button');
+    pick.type = 'button';
+    pick.className = 'saved-pick';
+    pick.setAttribute('aria-pressed', String(item.id === pickedDraftId));
+    const title = document.createElement('strong');
+    title.textContent = item.title;
+    const when = document.createElement('small');
+    when.textContent = `${savedDateLabel(item.savedAt)} 저장`;
+    pick.append(title, when);
+    pick.addEventListener('click', () => loadSavedDraft(item));
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'saved-remove';
+    remove.textContent = '×';
+    remove.title = '목록에서 지우기';
+    remove.setAttribute('aria-label', `${item.title} 지우기`);
+    remove.addEventListener('click', async () => {
+      try { savedDrafts = await invoke('draftsRemove', item.id); if (pickedDraftId === item.id) pickedDraftId = null; renderSavedDrafts(); status('저장한 초안을 지웠어요.', 'success'); fitDraftWindow(); }
+      catch (error) { report(error); }
+    });
+    row.append(pick, remove);
+    return row;
+  }));
+  element('saved-empty').hidden = savedDrafts.length > 0;
+}
+async function refreshSavedDrafts() {
+  if (typeof api?.draftsList !== 'function') return;
+  try { savedDrafts = await api.draftsList(); renderSavedDrafts(); fitDraftWindow(); } catch (error) { report(error); }
+}
+function showDraftOutput(title, body) {
+  element('result-title').value = title;
+  element('result-body').value = body;
+  element('draft-empty').hidden = true;
+  element('draft-output').hidden = false;
+  element('fill-draft').hidden = false;
+  growResultBody();
+  fitDraftWindow();
+}
+function loadSavedDraft(item) {
+  pickedDraftId = item.id;
+  element('draft-warnings').hidden = true;
+  showDraftOutput(item.title, item.body);
+  renderSavedDrafts();
+  status(`"${item.title}"을 불러왔어요. "기안문에 넣기"를 누르면 새 기안창에 들어가요.`, 'success');
+}
+
 function draftContents() { return { title: element('result-title').value.trim(), body: element('result-body').value }; }
 element('copy-draft').addEventListener('click', async () => {
   try {
     const draft = draftContents();
     await invoke('copy', `${draft.title}\n\n${draft.body}`);
     status('초안을 클립보드에 복사했어요.', 'success');
+  } catch (error) { report(error); }
+});
+element('keep-draft').addEventListener('click', async () => {
+  const draft = draftContents();
+  if (!draft.title || !draft.body.trim()) { status('제목과 초안 내용이 있어야 저장할 수 있어요.', 'idle'); return; }
+  try {
+    savedDrafts = await invoke('draftsSave', draft);
+    pickedDraftId = savedDrafts[0]?.id ?? null;
+    renderSavedDrafts();
+    fitDraftWindow();
+    status(`"${draft.title}"을 저장한 초안 목록에 넣었어요.`, 'success');
   } catch (error) { report(error); }
 });
 element('save-draft').addEventListener('click', async () => {
@@ -461,7 +531,8 @@ async function initialize() {
     renderState(await invoke('getState'));
     if (typeof api.onState === 'function') api.onState(renderState);
     if (typeof api.onStatus === 'function') api.onStatus((update) => status(update.message, update.phase, Boolean(update.busy)));
-    if (isAuxiliary && typeof api.onAuxView === 'function') api.onAuxView((name) => { showView(name); fitDraftWindow(); });
+    if (isAuxiliary && typeof api.onAuxView === 'function') api.onAuxView((name) => { showView(name); if (name === 'draft') refreshSavedDrafts(); fitDraftWindow(); });
+    if (isAuxiliary) refreshSavedDrafts();
     if (isAuxiliary && typeof api.onAuxSection === 'function') api.onAuxSection(focusSection);
   } catch (error) { report(error); }
 }

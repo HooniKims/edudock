@@ -91,6 +91,54 @@ function ConvertTo-NeisControlRecord {
     }
 }
 
+# One UI Automation round trip per element property made a page walk cost about a second: the
+# NEIS page has hundreds of buttons and each one was asked ~15 separate questions. A cache
+# request fetches every property and pattern state the walk needs in the same call as FindAll.
+function New-NeisCacheRequest {
+    $A = [System.Windows.Automation.AutomationElement]
+    $cache = [System.Windows.Automation.CacheRequest]::new()
+    foreach ($property in @(
+        $A::NameProperty, $A::ControlTypeProperty, $A::ClassNameProperty, $A::ProcessIdProperty, $A::IsOffscreenProperty,
+        $A::IsEnabledProperty, $A::BoundingRectangleProperty,
+        $A::IsInvokePatternAvailableProperty, $A::IsSelectionItemPatternAvailableProperty, $A::IsTogglePatternAvailableProperty,
+        $A::IsExpandCollapsePatternAvailableProperty, $A::IsScrollItemPatternAvailableProperty,
+        [System.Windows.Automation.SelectionItemPattern]::IsSelectedProperty,
+        [System.Windows.Automation.TogglePattern]::ToggleStateProperty,
+        [System.Windows.Automation.ExpandCollapsePattern]::ExpandCollapseStateProperty)) { $cache.Add($property) }
+    $cache.AutomationElementMode = [System.Windows.Automation.AutomationElementMode]::Full
+    return $cache
+}
+
+function ConvertFrom-NeisCachedElement {
+    param([System.Windows.Automation.AutomationElement]$Element)
+    $A = [System.Windows.Automation.AutomationElement]
+    $value = { param($property) $Element.GetCachedPropertyValue($property, $true) }
+    $notSupported = [System.Windows.Automation.AutomationElement]::NotSupported
+    $patterns = [System.Collections.Generic.List[string]]::new()
+    foreach ($entry in @(@('Invoke', $A::IsInvokePatternAvailableProperty), @('SelectionItem', $A::IsSelectionItemPatternAvailableProperty), @('Toggle', $A::IsTogglePatternAvailableProperty), @('ExpandCollapse', $A::IsExpandCollapsePatternAvailableProperty), @('ScrollItem', $A::IsScrollItemPatternAvailableProperty))) {
+        if ((& $value $entry[1]) -eq $true) { $patterns.Add($entry[0]) }
+    }
+    $selected = $false; $expanded = $false
+    if ($patterns.Contains('SelectionItem')) { $selected = ((& $value ([System.Windows.Automation.SelectionItemPattern]::IsSelectedProperty)) -eq $true) }
+    if ($patterns.Contains('Toggle')) { $selected = ((& $value ([System.Windows.Automation.TogglePattern]::ToggleStateProperty)) -eq [System.Windows.Automation.ToggleState]::On) }
+    if ($patterns.Contains('ExpandCollapse')) { $expanded = (& $value ([System.Windows.Automation.ExpandCollapsePattern]::ExpandCollapseStateProperty)) -in @([System.Windows.Automation.ExpandCollapseState]::Expanded, [System.Windows.Automation.ExpandCollapseState]::LeafNode) }
+    $rect = & $value ($A::BoundingRectangleProperty)
+    $type = & $value ($A::ControlTypeProperty)
+    return [pscustomobject]@{
+        name = [string](& $value ($A::NameProperty))
+        role = ([string]$type.ProgrammaticName).Replace('ControlType.', '')
+        className = [string](& $value ($A::ClassNameProperty))
+        processId = [int](& $value ($A::ProcessIdProperty))
+        visible = -not [bool](& $value ($A::IsOffscreenProperty))
+        enabled = [bool](& $value ($A::IsEnabledProperty))
+        patterns = @($patterns)
+        selected = $selected
+        expanded = $expanded
+        bounds = [pscustomobject]@{ left = $rect.Left; top = $rect.Top; width = $rect.Width; height = $rect.Height }
+        element = $Element
+    }
+}
+
 function Get-NeisControls {
     param([object]$Root)
     if ($Root.PSObject.Properties.Name -contains 'controls') { return @($Root.controls) }
@@ -103,8 +151,19 @@ function Get-NeisControls {
         [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, $_)
     }
     $condition = [System.Windows.Automation.OrCondition]::new(@($button, $tab) + $names)
-    $found = $Root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)
     $records = [System.Collections.Generic.List[object]]::new()
+    $cached = $null
+    try {
+        $cache = New-NeisCacheRequest
+        $scope = $cache.Activate()
+        try { $cached = $Root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition) } finally { $scope.Dispose() }
+        foreach ($element in $cached) { $records.Add((ConvertFrom-NeisCachedElement -Element $element)) }
+        return @($records)
+    } catch {
+        # Anything the cache cannot answer falls back to asking each element directly, as before.
+        $records.Clear()
+    }
+    $found = $Root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)
     foreach ($element in $found) { $records.Add((ConvertTo-NeisControlRecord -Element $element)) }
     return @($records)
 }

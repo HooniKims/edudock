@@ -200,3 +200,13 @@ test('with one task already open the other is still reachable', () => {
   const switching = run('state', fixture({ controls: withTripTab }));
   assert.deepEqual(switching.actions, ['select-trip-tab']);
 });
+
+test('the NEIS page is walked with a UI Automation cache and not read twice per step', () => {
+  const fs = require('node:fs');
+  const tasks = fs.readFileSync('src/native/neis-tasks.ps1', 'utf8');
+  assert.match(tasks, /\$scope = \$cache\.Activate\(\)/, 'properties arrive with the FindAll call');
+  assert.match(tasks, /Get-NeisTaskState -Root \$Root -Target \$Target -Controls \$freshControls/, 'one walk serves the state check and the press');
+  const edge = fs.readFileSync('src/native/ordinary-edge.ps1', 'utf8');
+  const neisBlock = edge.slice(edge.indexOf("$neisActions = @("), edge.indexOf("if ($request.action -eq 'portal')"));
+  assert.doesNotMatch(neisBlock, /Get-RealWindows/, 'the window evaluated for this call is reused');
+});

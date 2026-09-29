@@ -102,6 +102,8 @@ function requiresBlankBody(editor) {
   return isVerifiedGeneralDraftEditor(editor) && editor.documentState === 'blank';
 }
 
+const DOCUMENT_LOADING_REASONS = new Set(['editor-document-unavailable', 'editor-script-unavailable']);
+
 function publicFingerprint(editor) {
   return `${editor.pid}|${editor.processStartedAt}|${editor.hwnd}`;
 }
@@ -340,7 +342,17 @@ class DraftHandoffCoordinator {
       const settled = await this.#settleDialog(before, operation, fingerprint);
       if (settled.autosave === 'user-answered') throw new DraftHandoffError('not-fillable', 'The autosave prompt was answered by the user');
     }
-    const response = await this.#run({ command: 'fill-draft', target: fingerprint, title, body }, operation);
+    // A 기안창 that has just come up can still be loading its document: the window and its
+    // notices are there, but the page object is not reachable yet. That is only 'not yet' —
+    // retried for a few seconds; any other refusal stops at once.
+    let response;
+    for (let attempt = 0; ; attempt += 1) {
+      response = await this.#run({ command: 'fill-draft', target: fingerprint, title, body }, operation);
+      const loading = response.status === 'needs-user' && DOCUMENT_LOADING_REASONS.has(response.reason);
+      if (!loading || attempt >= 7) break;
+      await this.#pause(1000);
+      throwIfCancelled(operation);
+    }
     if (response.status === 'needs-user') throw new DraftHandoffError('needs-user', response.reason || 'The draft could not be written');
     if (response.filled !== true) throw new DraftHandoffError('not-filled', 'The draft was not written');
     return Object.freeze({ editor: opened.editor, filled: true });

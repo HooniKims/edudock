@@ -154,3 +154,21 @@ h1,.greeting h1,.brand{font-family:Paperlogy,'Malgun Gothic',sans-serif}
 #draft-view .primary.full{min-height:40px}
 #draft-view .field .optional{margin:0 0 0 4px}
 #draft-view #result-body{font-family:'GulimChe','굴림체','D2Coding',monospace;font-size:14px;letter-spacing:0}
+
+/* ---- 초안 만들기: actions and the saved list ---- */
+#draft-view .draft-actions{gap:8px;margin-bottom:10px}
+#draft-view .draft-actions .secondary{margin:0;padding:8px 10px;min-height:42px}
+#draft-view .fill-button{min-height:46px;font-size:13px;margin:0 0 4px}
+.saved-drafts{margin-top:20px;padding-top:16px;border-top:1px solid var(--line)}
+.saved-drafts h2{font-size:14px;margin:0}
+.saved-help{font-size:12px;color:var(--secondary);margin:4px 0 10px}
+#saved-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;max-height:240px;overflow:auto}
+#saved-list li{display:flex;align-items:center;gap:6px}
+#saved-list .saved-pick{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);text-align:left}
+#saved-list .saved-pick:hover{border-color:#9db8e8;background:var(--blue-pale)}
+#saved-list .saved-pick[aria-pressed="true"]{border-color:var(--blue);background:var(--blue-pale)}
+#saved-list .saved-pick strong{font-size:13px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#saved-list .saved-pick small{font-size:11.5px;color:var(--muted)}
+#saved-list .saved-remove{flex:none;width:32px;height:32px;border-radius:8px;background:transparent;color:var(--muted);font-size:16px}
+#saved-list .saved-remove:hover{background:#fae7e7;color:#a73c3c}
+.saved-empty{font-size:12.5px;color:var(--muted);margin:0}

@@ -15,6 +15,7 @@ const { PortalAutomation } = require('./portal.cjs');
 const { NativeOrdinaryEdgeBridge, OrdinaryEdgeAdapter, resolveOrdinaryEdgeHelper, resolveOrdinaryEdgeServeHelper, resolveDraftHandoffHelper } = require('./ordinary-edge.cjs');
 const { DraftHandoffCoordinator, NativeDraftHandoffBridge } = require('./draft-handoff.cjs');
 const { createUpdater, RELEASE_REPOSITORY } = require('./updater.cjs');
+const { createSavedDrafts } = require('./saved-drafts.cjs');
 
 let notch;
 let auxiliary;
@@ -609,7 +610,11 @@ app.whenReady().then(() => {
   });
   handle('cancel-auth', ['notch', 'auxiliary', 'popover'], () => automation.cancel());
   handle('retry-auth', ['notch', 'auxiliary', 'popover'], () => automation.retry());
-  handle('generate-draft', ['auxiliary'], generateDraft);
+  handle('generate-draft', ['auxiliary'], input => generateDraft(input));
+  const savedDrafts = createSavedDrafts({ directory: app.getPath('userData') });
+  handle('drafts-list', ['auxiliary'], () => savedDrafts.list());
+  handle('drafts-save', ['auxiliary'], draft => savedDrafts.save(draft));
+  handle('drafts-remove', ['auxiliary'], id => savedDrafts.remove(typeof id === 'string' ? id : ''));
   handle('copy', ['auxiliary'], text => {
     if (typeof text !== 'string' || text.length > 200000) throw new Error('복사할 내용이 올바르지 않습니다.');
     clipboard.writeText(text);
