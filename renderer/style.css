@@ -140,3 +140,16 @@ h1,.greeting h1,.brand{font-family:Paperlogy,'Malgun Gothic',sans-serif}
 .brand-mark img{width:28px;height:28px;display:block}
 @keyframes spotlight{0%{background:rgba(35,97,206,.16);box-shadow:0 0 0 2px rgba(35,97,206,.45)}100%{background:transparent;box-shadow:0 0 0 2px transparent}}
 .settings-card .setting-row.spotlight{animation:spotlight 2.4s ease-out;border-radius:10px;margin-inline:-8px;padding-inline:8px}
+
+/* ---- 초안 만들기: compact so the whole form and draft fit on one screen ---- */
+#draft-view .view-heading{padding:0 0 12px}
+#draft-view .view-heading h1{font-size:18px;line-height:1.5}
+#draft-view .segments{margin-bottom:12px}
+#draft-view .field{gap:5px;margin-bottom:10px}
+#draft-view .field input,#draft-view .field select{padding:8px 11px}
+#draft-view .field textarea{padding:9px 11px}
+#draft-view .field-row{gap:10px}
+#draft-view .helper{margin:8px 0 10px}
+#draft-view #result-body{resize:none;overflow:hidden;min-height:180px;line-height:1.75}
+#draft-view .primary.full{min-height:40px}
+#draft-view .field .optional{margin:0 0 0 4px}

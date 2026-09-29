@@ -618,6 +618,17 @@ app.whenReady().then(() => {
     fs.writeFileSync(file.filePath, '\uFEFF' + draft.title + '\r\n\r\n' + draft.body.replace(/\r?\n/g, '\r\n'), 'utf8');
     return { ok: true, message: '초안을 파일로 저장했습니다.' };
   });
+  // The 초안 window asks for the height its content needs; it grows or shrinks to that, stays on
+  // screen, and keeps its width. Settings keeps its own fixed size.
+  handle('fit-window', ['auxiliary'], request => {
+    if (!auxiliary || auxiliary.isDestroyed() || !Number.isFinite(request?.height)) return { ok: false };
+    const bounds = auxiliary.getBounds();
+    const area = screen.getDisplayMatching(bounds).workArea;
+    const height = Math.round(Math.max(480, Math.min(area.height, request.height)));
+    const y = Math.max(area.y, Math.min(bounds.y, area.y + area.height - height));
+    auxiliary.setBounds({ x: bounds.x, y, width: bounds.width, height });
+    return { ok: true, height };
+  });
   handle('update-check', ['auxiliary'], () => updater?.check() ?? null);
   handle('update-download', ['auxiliary'], () => updater?.download() ?? false);
   handle('update-answer', ['popover'], answerUpdate);

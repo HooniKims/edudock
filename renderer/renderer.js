@@ -113,7 +113,7 @@ all('[data-view]').forEach((button) => button.addEventListener('click', () => {
   else showView(button.dataset.view);
 }));
 all('[data-menu]').forEach((button) => button.addEventListener('click', () => openMenu(button.dataset.menu)));
-all('[data-kind]').forEach((button) => button.addEventListener('click', () => selectKind(button.dataset.kind)));
+all('[data-kind]').forEach((button) => button.addEventListener('click', () => { selectKind(button.dataset.kind); fitDraftWindow(); }));
 all('[data-window]').forEach((button) => button.addEventListener('click', async () => {
   try {
     const result = await invoke('window', button.dataset.window);
@@ -238,6 +238,26 @@ function focusSection(name) {
   });
 }
 
+// The 초안 window shows everything at once: the result box grows with its text, and the window
+// is resized so neither the form nor the draft needs scrolling (never beyond the screen).
+function growResultBody() {
+  const body = element('result-body');
+  body.style.height = 'auto';
+  body.style.height = `${Math.max(160, body.scrollHeight + 4)}px`;
+}
+function fitDraftWindow() {
+  if (!isAuxiliary || activeView !== 'draft' || typeof api?.fitWindow !== 'function') return;
+  requestAnimationFrame(() => {
+    // Measured from the view itself (not scrollHeight), so the window also shrinks back when the
+    // content gets shorter, e.g. switching from 일반기안 to 출장.
+    const content = document.querySelector('.content');
+    const style = getComputedStyle(content);
+    const inner = element('draft-view').offsetHeight + parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+    const needed = Math.ceil(window.innerHeight - content.clientHeight + inner);
+    api.fitWindow({ height: needed }).catch(() => {});
+  });
+}
+
 const EDGE_NAMES = { top: '위', right: '오른쪽', bottom: '아래', left: '왼쪽' };
 // Monitors are drawn in their real arrangement, so "the left screen" is simply the one on the left.
 function renderMonitorMap(next) {
@@ -328,12 +348,14 @@ element('draft-form').addEventListener('submit', async (event) => {
     element('draft-warnings').textContent = warnings;
     element('draft-warnings').hidden = !warnings;
     status('초안이 준비되었어요. 내용을 확인하고 다듬어주세요.', 'success');
-    element('draft-result').scrollIntoView({ behavior: 'instant', block: 'start' });
+    growResultBody();
+    fitDraftWindow();
     element('result-body').focus({ preventScroll: true });
   } catch (error) { report(error); }
   finally { button.disabled = false; button.textContent = '초안 다시 생성'; }
 });
 
+element('result-body').addEventListener('input', growResultBody);
 function draftContents() { return { title: element('result-title').value.trim(), body: element('result-body').value }; }
 element('copy-draft').addEventListener('click', async () => {
   try {
@@ -447,7 +469,7 @@ async function initialize() {
     renderState(await invoke('getState'));
     if (typeof api.onState === 'function') api.onState(renderState);
     if (typeof api.onStatus === 'function') api.onStatus((update) => status(update.message, update.phase, Boolean(update.busy)));
-    if (isAuxiliary && typeof api.onAuxView === 'function') api.onAuxView(showView);
+    if (isAuxiliary && typeof api.onAuxView === 'function') api.onAuxView((name) => { showView(name); fitDraftWindow(); });
     if (isAuxiliary && typeof api.onAuxSection === 'function') api.onAuxSection(focusSection);
   } catch (error) { report(error); }
 }

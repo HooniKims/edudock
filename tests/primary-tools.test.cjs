@@ -48,3 +48,13 @@ test('notch presents one NEIS and one K-EduFine primary menu, with no portal pri
   assert.match(markup, /data-menu="neis"[^>]*aria-label="나이스"/);
   assert.match(markup, /data-menu="edufine"[^>]*aria-label="K-에듀파인"/);
 });
+
+test('the 초안 window sizes itself to show the whole form and draft without scrolling', () => {
+  const fs = require('node:fs');
+  const renderer = fs.readFileSync('renderer/renderer.js', 'utf8');
+  assert.match(renderer, /api\.fitWindow\(\{ height: needed \}\)/);
+  assert.match(renderer, /growResultBody\(\);\s*fitDraftWindow\(\);/);
+  const main = fs.readFileSync('src/main.cjs', 'utf8');
+  assert.match(main, /handle\('fit-window', \['auxiliary'\]/);
+  assert.match(main, /Math\.min\(area\.height, request\.height\)/, 'never taller than the screen');
+});
