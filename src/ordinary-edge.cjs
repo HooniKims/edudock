@@ -63,6 +63,8 @@ function validateRequest(request) {
     result.system = request.system;
     // false = only switch to the tab; the page there may be logged out or behind a notice.
     if (request.requireLanding === false) result.requireLanding = false;
+    // true = raise the window even while the teacher is in another program (see the password wait).
+    if (request.bringForward === true) result.bringForward = true;
   }
   return result;
 }
@@ -477,6 +479,18 @@ class OrdinaryEdgeAdapter {
         }
         return false;
       }
+    }
+    // Nothing stored: the teacher types the password into the certificate window. It opened in
+    // an Edge window that is usually behind whatever they were doing, so the widget sat waiting
+    // on a prompt nobody could see (seen on every PC without a saved password). Raise it once.
+    if (certificate.visible && certificate.certRowCount === 1 && certificate.selectedCertRowCount === 1 && !state.passwordSubmitted && !state.surfacedForPassword) {
+      state.surfacedForPassword = true;
+      try {
+        await this.invoke(state, 'activate-system-tab', operation, { system: 'portal', requireLanding: false, bringForward: true });
+      } catch (error) {
+        if (error instanceof AuthenticationCancelledError) throw error;
+      }
+      return false;
     }
     if (certificate.visible && certificate.certRowCount !== null && certificate.certRowCount > 0) return false;
     if (certificate.visible && certificate.selectedStore === null && certificate.hardDiskAvailable && !state.hardDiskAttempted) {

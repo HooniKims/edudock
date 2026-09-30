@@ -738,6 +738,7 @@ function Test-ValidRequest {
     )
     if ($Request.command -eq 'invoke' -and ($Request.action -notin $validActions -or $null -eq $Request.target)) { return $false }
     if ($Request.command -eq 'invoke' -and $null -ne $Request.requireLanding -and $Request.requireLanding -isnot [bool]) { return $false }
+    if ($Request.command -eq 'invoke' -and $null -ne $Request.bringForward -and $Request.bringForward -isnot [bool]) { return $false }
     if ($null -ne $Request.restoreMinimised -and $Request.restoreMinimised -isnot [bool]) { return $false }
     if ($Request.command -eq 'invoke' -and $Request.action -eq 'select-drive') {
         if ($Request.driveId -isnot [string] -or $Request.driveId -cnotmatch '^[A-Z]:$' -or $Request.driveOptionsToken -isnot [string] -or $Request.driveOptionsToken.Length -eq 0) { return $false }
@@ -870,7 +871,9 @@ try {
         # A background helper cannot raise a window with a bare SetForegroundWindow; Activate
         # attaches to the foreground thread first. Its outcome is reported (window.foreground),
         # never required: the user working in another window must not break the task.
-        if (-not [OrdinaryEdgeNativeV1]::UserElsewhere()) { $null = [OrdinaryEdgeNativeV1]::Activate($targetHandle) }
+        # bringForward: the teacher has to type into this window now (certificate password), so it
+        # is raised even while they are in another program.
+        if ($request.bringForward -eq $true -or -not [OrdinaryEdgeNativeV1]::UserElsewhere()) { $null = [OrdinaryEdgeNativeV1]::Activate($targetHandle) }
         # Switching an Edge tab is asynchronous: the address bar still reported the previous
         # tab's page when it was read once, 150 ms after the click, and a perfectly good switch
         # came back 'unavailable'. Give the browser a moment, re-reading until it agrees.

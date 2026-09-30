@@ -252,6 +252,8 @@ test('user-selected drive is preserved and saved only after trusted authenticati
   const requests = [];
   const responses = [
     reply([windowState({ certificate: certificate({ visible: true, removableAvailable: true, selectedStore: 'removable-disk', driveOptions: [{ id: 'D:', label: 'DATA(D:)', selected: true }], driveOptionsToken: 'user', selectedDriveId: 'D:', certRowCount: 1, selectedCertRowCount: 1, soleCertRowSelectable: true }) })]),
+    // The password box is raised for the teacher (nothing stored); that invoke gets its own answer.
+    reply([windowState()], { invoked: true }),
     reply([windowState({ authenticated: true, actions: ['portal'] })]),
   ];
   const adapter = new OrdinaryEdgeAdapter({ runNative: async request => { requests.push(request); return responses.shift(); }, openExternal: async () => {}, getDriveHint: () => null, saveDriveHint: id => saved.push(id) });
@@ -260,7 +262,8 @@ test('user-selected drive is preserved and saved only after trusted authenticati
   assert.deepEqual(saved, []);
   assert.equal(await adapter.observeAuthenticated(op), true);
   assert.deepEqual(saved, ['D:']);
-  assert.equal(requests.some(request => request.command === 'invoke'), false);
+  assert.deepEqual(requests.filter(request => request.command === 'invoke').map(request => request.action), ['activate-system-tab']);
+  assert.equal(requests.some(request => 'password' in request), false);
 });
 
 test('unknown hard-disk state never falls back to removable media', async () => {

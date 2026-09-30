@@ -177,7 +177,7 @@ test('a stored password is submitted once, and the secret never appears in the r
   assert.equal(requests.filter(request => request.action === 'submit-certificate-password').length, 1, 'never retried');
 });
 
-test('no stored password means the user is simply left at the password box', async () => {
+test('no stored password: the password box is brought forward once and nothing is typed', async () => {
   const requests = [];
   const adapter = new OrdinaryEdgeAdapter({
     runNative: async request => { requests.push(request); return reply([chosen()]); },
@@ -186,7 +186,10 @@ test('no stored password means the user is simply left at the password box', asy
   const op = operation();
   adapter.state(op).target = target;
   assert.equal(await adapter.observeAuthenticated(op), false);
-  assert.equal(requests.some(request => request.command === 'invoke'), false);
+  assert.equal(await adapter.observeAuthenticated(op), false);
+  const invokes = requests.filter(request => request.command === 'invoke');
+  assert.deepEqual(invokes.map(request => [request.action, request.system, request.bringForward]), [['activate-system-tab', 'portal', true]]);
+  assert.equal(invokes.some(request => 'password' in request), false);
 });
 
 test('a rejected stored password is cleared and explained instead of being tried again', async () => {
