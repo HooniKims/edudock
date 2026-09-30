@@ -83,7 +83,9 @@ function createNotchPopover({ BrowserWindow, screen, preload, onWindow, onPresen
     const size = kind === 'status' ? { width: 280, height: 176 }
       : kind === 'guide' ? (request.guide?.kind === 'password-offer' ? { width: 330, height: 372 } : { width: 330, height: 216 })
         : kind === 'update' ? { width: 330, height: 196 }
-        : kind === 'hint' ? { width: 340, height: 60 }
+        // The launch hint is one line; a longer notice (e.g. the stored password could not be
+        // opened) wraps onto three.
+        : kind === 'hint' ? { width: 340, height: String(request.label || '').length > 34 ? 104 : 60 }
         : { width: 220, height: 52 };
     const workArea = screen.getDisplayMatching(request.notchBounds).workArea;
     const bounds = placePopover(request.notchBounds, request.anchor, size, workArea, request.edge);

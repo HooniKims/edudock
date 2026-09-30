@@ -123,5 +123,11 @@ test('the saved password is typed in only while auto-login is on, and nothing lo
   // Launching the app, switching auto-login on or saving the password opens nothing by itself.
   assert.doesNotMatch(main, /startAutoLogin|startBackgroundLogin/);
   assert.match(main, /if \(!shouldAutoStart\(settings\)\) setTimeout\(showLaunchHint, 1500\);/);
-  assert.match(main, /label: '버튼을 누르시면 해당 메뉴로 바로 이동합니다\.'/);
+  assert.match(main, /'버튼을 누르시면 해당 메뉴로 바로 이동합니다\.'/);
+});
+
+test('a stored password this PC cannot open turns "saved" and auto-login off and says so once', () => {
+  const main = fs.readFileSync('src/main.cjs', 'utf8');
+  assert.match(main, /settings\.passwordSaved === true && secrets\?\.available\(\) && secrets\.load\(\) === null\) \{\s*secrets\.clear\(\);\s*settings = sanitizedSettings\(\{ \.\.\.settings, passwordSaved: false, autoLogin: false \}\);\s*storedPasswordLost = true;/);
+  assert.match(main, /'저장해 둔 비밀번호를 이 PC에서 열 수 없어 자동 로그인을 껐어요\. 설정에서 비밀번호를 한 번 다시 저장해 주세요\.'/);
 });

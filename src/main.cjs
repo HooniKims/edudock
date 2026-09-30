@@ -38,6 +38,7 @@ if (!app.requestSingleInstanceLock()) app.quit();
 let guide = null;
 let guideStep = null;
 let secrets = null;
+let storedPasswordLost = false;
 let nativeBridges = [];
 
 function guideAnchorButton(step) {
@@ -321,9 +322,14 @@ let launchHintTimer = null;
 function showLaunchHint() {
   if (!notch?.window || notch.window.isDestroyed() || !notch.window.isVisible() || guide || updateQuestion) return;
   const bounds = notch.window.getBounds();
-  popover.show({ kind: 'hint', label: '버튼을 누르시면 해당 메뉴로 바로 이동합니다.', anchor: bounds, notchBounds: bounds, edge: settings.placement.edge });
+  // A stored password that could not be opened at start-up is said once, in place of the usual hint.
+  const label = storedPasswordLost
+    ? '저장해 둔 비밀번호를 이 PC에서 열 수 없어 자동 로그인을 껐어요. 설정에서 비밀번호를 한 번 다시 저장해 주세요.'
+    : '버튼을 누르시면 해당 메뉴로 바로 이동합니다.';
+  popover.show({ kind: 'hint', label, anchor: bounds, notchBounds: bounds, edge: settings.placement.edge });
   clearTimeout(launchHintTimer);
-  launchHintTimer = setTimeout(() => { if (popover.kind === 'hint') popover.hide(); }, 8000);
+  launchHintTimer = setTimeout(() => { if (popover.kind === 'hint') popover.hide(); }, storedPasswordLost ? 15000 : 8000);
+  storedPasswordLost = false;
   launchHintTimer.unref?.();
 }
 
@@ -399,6 +405,15 @@ app.whenReady().then(() => {
   settings = loadSettings(app.getPath('userData'));
   if (settings.autoLogin && settings.passwordSaved !== true) settings = sanitizedSettings({ ...settings, autoLogin: false });
   try { secrets = new SecretStore({ directory: app.getPath('userData'), safeStorage }); } catch { secrets = null; }
+  // A stored password this copy can no longer open (its key lives in this folder's Local State,
+  // so a copied or restored folder, or another Windows account, loses it) must not keep claiming
+  // "saved": auto-login then waited at the certificate window until it timed out. Show the
+  // teacher the save box again instead.
+  if (settings.passwordSaved === true && secrets?.available() && secrets.load() === null) {
+    secrets.clear();
+    settings = sanitizedSettings({ ...settings, passwordSaved: false, autoLogin: false });
+    storedPasswordLost = true;
+  }
   persist();
 
   notch = createNotchWindow({
