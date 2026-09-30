@@ -673,7 +673,9 @@ test('the new 기안창 is always raised — the moment it appears and again whe
   const draftHelper = fs.readFileSync(require('node:path').join(__dirname, '..', 'src', 'native', 'edufine-draft.ps1'), 'utf8');
   assert.doesNotMatch(draftHelper, /UserElsewhere/, 'the 기안 button always shows its window');
   const edgeHelper = fs.readFileSync(require('node:path').join(__dirname, '..', 'src', 'native', 'ordinary-edge.ps1'), 'utf8');
-  assert.match(edgeHelper, /if \(-not \[OrdinaryEdgeNativeV1\]::UserElsewhere\(\)\) \{ \$null = \[OrdinaryEdgeNativeV1\]::Activate\(\$targetHandle\) \}/, 'mid-flow Edge tab switches still do not steal focus');
+  // Only a tab the teacher must type into now (the certificate password, bringForward) is raised
+  // while they are elsewhere; every other mid-flow switch leaves the foreground alone.
+  assert.match(edgeHelper, /if \(\$request\.bringForward -eq \$true -or -not \[OrdinaryEdgeNativeV1\]::UserElsewhere\(\)\) \{ \$null = \[OrdinaryEdgeNativeV1\]::Activate\(\$targetHandle\) \}/, 'mid-flow Edge tab switches still do not steal focus');
   const calls = [];
   const existing = editor();
   const fresh = editor({ pid: 11704, hwnd: '5551', processStartedAt: '2026-09-22T02:20:00.0000000Z' });
