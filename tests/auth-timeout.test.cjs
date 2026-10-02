@@ -32,6 +32,8 @@ test('no-input authentication timeout becomes needs-user and releases pending wo
     phase: 'needs-user',
     message: timedOut.message,
     busy: false,
+    // The reason code goes to the local problem-report log only.
+    detail: 'AuthenticationTimeoutError',
   });
   assert.equal(automation.busy, false);
   assert.equal(automation.operation, null);

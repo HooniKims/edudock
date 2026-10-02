@@ -12,6 +12,13 @@ function trusted(url) {
   } catch { return false; }
 }
 
+// Reason codes only (e.g. "needs-user/korean-ocr-unavailable"), never the error's free text.
+function failureDetail(error) {
+  const parts = [error?.name, error?.code, error?.reason, error?.cause?.code, error?.cause?.reason]
+    .filter(part => typeof part === 'string' && /^[\w.-]{1,60}$/.test(part));
+  return [...new Set(parts)].join('/') || undefined;
+}
+
 class PortalAutomation {
   constructor({ status, launchContext = null, openPortal = null, observeAuthenticated = null, resumeAction = null, autoLogin = false, connectionTimeoutMs = 45000, authTimeoutMs = 300000, takeoverGraceMs = 1500, pause = delay, now = Date.now }) {
     this.report = status; this.connectionTimeoutMs = connectionTimeoutMs; this.authTimeoutMs = authTimeoutMs; this.pause = pause; this.now = now;
@@ -19,8 +26,9 @@ class PortalAutomation {
     this.autoLogin = autoLogin === true; this.takeoverGraceMs = takeoverGraceMs;
     this.context = null; this.busy = false; this.operation = null; this.retryAction = null; this.generation = 0;
   }
-  status(phase, message, busy = true) { this.report({ phase, message, busy }); }
-  statusFor(operation, phase, message, busy = true) { if (this.operation === operation && !operation.cancelled) this.status(phase, message, busy); }
+  // detail: the failure's reason code, for the local problem-report log only (never shown).
+  status(phase, message, busy = true, detail = undefined) { this.report({ phase, message, busy, ...(detail ? { detail } : {}) }); }
+  statusFor(operation, phase, message, busy = true, detail = undefined) { if (this.operation === operation && !operation.cancelled) this.status(phase, message, busy, detail); }
   diagnostics() { return { ...diagnostics(), browserConnected: Boolean(this.context), authenticationPending: Boolean(this.operation), retryAvailable: Boolean(this.retryAction) }; }
   createOperation(action, automatic = false) {
     let resolveCancellation;
@@ -218,15 +226,15 @@ class PortalAutomation {
     } catch (error) {
       if (error instanceof AuthenticationCancelledError || error?.code === 'cancelled') return { ok: false, phase: 'cancelled', message: error.message };
       if (error?.code === 'needs-user') {
-        if (!operation.cancelled) { this.retryAction = id; this.statusFor(operation, 'needs-user', error.message, false); }
+        if (!operation.cancelled) { this.retryAction = id; this.statusFor(operation, 'needs-user', error.message, false, failureDetail(error)); }
         return { ok: false, phase: 'needs-user', message: error.message };
       }
       if (error instanceof AuthenticationTimeoutError || error instanceof ConnectionTimeoutError) {
-        if (!operation.cancelled) { this.retryAction = id; this.statusFor(operation, 'needs-user', error.message, false); }
+        if (!operation.cancelled) { this.retryAction = id; this.statusFor(operation, 'needs-user', error.message, false, failureDetail(error)); }
         return { ok: false, phase: 'needs-user', message: error.message };
       }
       const message = error instanceof Error && !/locator\.|browserType\.|page\./.test(error.message) ? error.message : 'Edge 연결 또는 화면 대기 시간이 초과되었습니다. 열린 화면과 연결 상태를 확인해 주세요.';
-      this.statusFor(operation, 'error', message, false); return { ok: false, message };
+      this.statusFor(operation, 'error', message, false, failureDetail(error)); return { ok: false, message };
     } finally { if (this.operation === operation) { this.operation = null; this.busy = false; } }
   }
 }

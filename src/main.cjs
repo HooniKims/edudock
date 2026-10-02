@@ -16,6 +16,7 @@ const { NativeOrdinaryEdgeBridge, OrdinaryEdgeAdapter, resolveOrdinaryEdgeHelper
 const { DraftHandoffCoordinator, NativeDraftHandoffBridge } = require('./draft-handoff.cjs');
 const { createUpdater, RELEASE_REPOSITORY } = require('./updater.cjs');
 const { createSavedDrafts } = require('./saved-drafts.cjs');
+const { createDiagnosticLog } = require('./diagnostic-log.cjs');
 
 let notch;
 let auxiliary;
@@ -39,6 +40,7 @@ let guide = null;
 let guideStep = null;
 let secrets = null;
 let storedPasswordLost = false;
+let diagnosticLog = null;
 let nativeBridges = [];
 
 function guideAnchorButton(step) {
@@ -403,6 +405,8 @@ app.on('second-instance', () => {
 
 app.whenReady().then(() => {
   settings = loadSettings(app.getPath('userData'));
+  diagnosticLog = createDiagnosticLog({ directory: app.getPath('userData') });
+  diagnosticLog.append('app-start', { version: app.getVersion(), detail: `${process.windowsStore ? 'store' : app.isPackaged ? 'installed' : 'development'}` });
   if (settings.autoLogin && settings.passwordSaved !== true) settings = sanitizedSettings({ ...settings, autoLogin: false });
   try { secrets = new SecretStore({ directory: app.getPath('userData'), safeStorage }); } catch { secrets = null; }
   // A stored password this copy can no longer open (its key lives in this folder's Local State,
@@ -483,6 +487,7 @@ app.whenReady().then(() => {
     status: data => {
       const labels = { opening: '업무 화면 여는 중', certificate: '인증서 연결 중', 'awaiting-user-auth': '사용자 인증 필요', authenticated: '로그인 확인', navigating: '업무 화면 이동 중', done: '완료', opened: '화면 열림', cancelled: '취소됨', 'needs-user': '확인 필요', error: '오류' };
       currentStatus = { phase: data.phase || 'idle', label: labels[data.phase] || '업무 상태', message: data.message || '업무 상태가 변경되었습니다.', busy: Boolean(data.busy) };
+      diagnosticLog?.append('status', { phase: currentStatus.phase, message: currentStatus.message, detail: data.detail });
       sendManaged('status', currentStatus);
       publish();
     },
@@ -592,6 +597,7 @@ app.whenReady().then(() => {
   // A bare menu id opens the menu. { id, draft } additionally hands 초안 만들기's result to
   // 일반기안문, so the teacher goes from generated text to a filled form in one press.
   handle('open-menu', ['notch', 'auxiliary'], request => {
+    diagnosticLog?.append('press', { id: typeof request === 'string' ? request : `${request?.id}${request?.draft ? '+draft' : ''}` });
     clearTimeout(popoverHideTimer);
     popover.hide();
     notch.dispatch('focus', false);
@@ -642,6 +648,16 @@ app.whenReady().then(() => {
     if (file.canceled) return { ok: false, message: '저장을 취소했습니다.' };
     fs.writeFileSync(file.filePath, '\uFEFF' + draft.title + '\r\n\r\n' + draft.body.replace(/\r?\n/g, '\r\n'), 'utf8');
     return { ok: true, message: '초안을 파일로 저장했습니다.' };
+  });
+  // 문제 보고용 기록: the teacher saves the local log as a text file and sends it themselves.
+  handle('save-report', ['auxiliary'], async () => {
+    const parent = auxiliary && !auxiliary.isDestroyed() ? auxiliary : notch.window;
+    const stamp = new Date().toISOString().slice(0, 10);
+    const file = await dialog.showSaveDialog(parent, { defaultPath: path.join(app.getPath('desktop'), `업무포털도우미-문제보고-${stamp}.txt`), filters: [{ name: '텍스트', extensions: ['txt'] }] });
+    if (file.canceled) return { ok: false, message: '저장을 취소했습니다.' };
+    const edition = process.windowsStore ? 'Microsoft Store' : updater?.state.mode === 'portable' ? '포터블' : app.isPackaged ? '설치형' : '개발 실행';
+    fs.writeFileSync(file.filePath, '\uFEFF' + diagnosticLog.report({ appVersion: app.getVersion(), edition }), 'utf8');
+    return { ok: true, message: '바탕화면에 문제 보고용 기록을 저장했어요. 이 파일을 만든 사람에게 보내 주세요.' };
   });
   // The 초안 window asks for the height its content needs; it grows or shrinks to that, stays on
   // screen, and keeps its width. Settings keeps its own fixed size.

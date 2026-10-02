@@ -286,7 +286,9 @@ function translateDraftHandoffError(error) {
     if (key) return Object.assign(new Error(HELPER_REASON_MESSAGES[key]), { code: 'needs-user', reason: error.message });
   }
   if (!Object.hasOwn(DRAFT_HANDOFF_MESSAGES, code)) return error;
-  return Object.assign(new Error(DRAFT_HANDOFF_MESSAGES[code]), { code: 'needs-user', reason: code });
+  // An unrecognised helper reason still reaches the problem-report log as its own code.
+  const helperReason = code === 'needs-user' && typeof error.message === 'string' && /^[\w.-]{1,60}$/.test(error.message) ? error.message : null;
+  return Object.assign(new Error(DRAFT_HANDOFF_MESSAGES[code]), { code: 'needs-user', reason: code, ...(helperReason ? { cause: { reason: helperReason } } : {}) });
 }
 
 function requireAuthenticationIfReturned(window) {

@@ -495,6 +495,12 @@ element('diagnostics-button').addEventListener('click', async () => {
     renderDiagnostics(await invoke('getDiagnostics'));
   } catch (error) { report(error); }
 });
+element('report-button').addEventListener('click', async () => {
+  try {
+    const result = await invoke('saveReport');
+    status(result.message, result.ok ? 'done' : 'idle', false);
+  } catch (error) { report(error); }
+});
 
 const resizeHandle = document.querySelector('.resize-handle');
 resizeHandle.addEventListener('pointerdown', (event) => {
