@@ -711,3 +711,16 @@ test('writing waits for a 기안창 whose document is still loading, but never r
   await assert.rejects(notBlank.fill(opened, { title: '제목', body: '본문' }, operation()));
   assert.equal(refused, 1, 'a document that is not blank is never written into by retrying');
 });
+
+test('the 공용서식 list is watched, labels are compared without their leading space, and only that step gets longer', () => {
+  const fs = require('node:fs');
+  const helper = fs.readFileSync(require('node:path').join(__dirname, '..', 'src', 'native', 'edufine-draft.ps1'), 'utf8');
+  // The real labels read " 일반기안문 서식(결재4인,협조4인)"; an exact-name lookup never matched them.
+  assert.match(helper, /\$_\.Current\.Name\.Trim\(\) -ceq \$Name/);
+  assert.match(helper, /\$list = Wait-PublicFormEntry -Root \(Get-TopLevelElement -Element \$top\[0\]\)/);
+  assert.doesNotMatch(helper, /Start-Sleep -Milliseconds 700\s*\r?\n\s*\$forms = @\(Find-ExactNamedElement/);
+  const { NativeDraftHandoffBridge } = require('../src/draft-handoff.cjs');
+  const bridge = new NativeDraftHandoffBridge({ helperPath: 'x.ps1' });
+  assert.equal(bridge.timeoutFor({ command: 'open-public-form' }), 30000);
+  assert.equal(bridge.timeoutFor({ command: 'inspect-editors' }), 10000);
+});

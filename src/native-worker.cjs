@@ -66,7 +66,7 @@ class NativeHelperWorker {
     return worker;
   }
 
-  send(body, operation) {
+  send(body, operation, timeoutMs = this.timeoutMs) {
     return new Promise((resolve, reject) => {
       let worker;
       try {
@@ -93,7 +93,7 @@ class NativeHelperWorker {
           reject(error);
         } else resolve(value);
       };
-      timer = setTimeout(() => finish(this.errors.timeout()), this.timeoutMs);
+      timer = setTimeout(() => finish(this.errors.timeout()), timeoutMs);
       unsubscribe = operation?.onCancel?.(() => finish(this.errors.cancelled()));
       const cancellation = operation?.cancellation || operation?.cancellationPromise;
       if (cancellation && typeof cancellation.then === 'function') {
@@ -108,9 +108,10 @@ class NativeHelperWorker {
     });
   }
 
-  // Serialised: responses are matched by order, so a second request must wait.
-  run(body, operation) {
-    const attempt = this.chain.then(() => this.send(body, operation), () => this.send(body, operation));
+  // Serialised: responses are matched by order, so a second request must wait. timeoutMs lets one
+  // long request (opening 공용서식) take longer than the usual quick looks.
+  run(body, operation, timeoutMs = this.timeoutMs) {
+    const attempt = this.chain.then(() => this.send(body, operation, timeoutMs), () => this.send(body, operation, timeoutMs));
     this.chain = attempt.then(() => {}, () => {});
     return attempt;
   }

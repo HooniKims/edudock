@@ -66,10 +66,15 @@ const relative = file => path.relative(root, file).replaceAll('\\', '/');
     // An editor the teacher already has open never blocks the menu: the product opens its own
     // form beside it and hands back only the new window.
     // One look before, one click, then polling until the new window has been quiet for a moment.
-    assert.deepEqual(draftRequests.slice(0, 3), ['inspect-editors', 'open-public-form', 'inspect-editors']);
+    // The app also runs one 'inspect-editors' on its own 2.5 s after start (helper pre-warm); under
+    // load it can land before the draft press, so any looks before the click are allowed.
+    const click = draftRequests.indexOf('open-public-form');
+    assert.ok(click >= 1 && draftRequests.slice(0, click).every(command => command === 'inspect-editors'), JSON.stringify(draftRequests));
+    assert.equal(draftRequests[click + 1], 'inspect-editors', JSON.stringify(draftRequests));
+    assert.equal(draftRequests.filter(command => command === 'open-public-form').length, 1, JSON.stringify(draftRequests));
     // ...and finally the one new window is raised so the teacher sees it.
     // The new window is raised as soon as it appears and once more when ready.
-    assert.ok(draftRequests.slice(3, -1).every(command => ['inspect-editors', 'focus-editor'].includes(command)), JSON.stringify(draftRequests));
+    assert.ok(draftRequests.slice(click + 2, -1).every(command => ['inspect-editors', 'focus-editor'].includes(command)), JSON.stringify(draftRequests));
     assert.equal(draftRequests.at(-1), 'focus-editor', JSON.stringify(draftRequests));
     const raised = finalRecords.filter(record => record.kind === 'native-draft' && record.request.command === 'focus-editor');
     const before = finalRecords.find(record => record.kind === 'native-draft' && record.request.command === 'inspect-editors');

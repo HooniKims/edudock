@@ -297,6 +297,66 @@ function Find-ExactNamedElement {
     })
 }
 
+# The browser window an element lives in; searching only that window is about four times faster
+# than searching the whole desktop (0.26 s against 1 s for the 공용서식 page).
+function Get-TopLevelElement {
+    param([System.Windows.Automation.AutomationElement]$Element)
+    $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+    $root = [System.Windows.Automation.AutomationElement]::RootElement
+    $node = $Element
+    for ($depth = 0; $depth -lt 64; $depth += 1) {
+        $parent = $walker.GetParent($node)
+        if ($null -eq $parent -or [System.Windows.Automation.Automation]::Compare($parent, $root)) { return $node }
+        $node = $parent
+    }
+    return $node
+}
+
+# Watches the 공용서식 list for the one form whose label is exactly $Name. The labels carry a
+# leading space (" 일반기안문 서식(결재4인,협조4인)"), so an exact-name lookup never matched and every
+# press fell through to OCR, which succeeds or fails with whatever happens to be on screen.
+#  - found: exactly one visible row label (its hyperlink is preferred over the row itself)
+#  - missing: the list has rows and has stopped changing, yet the form is not among them
+#  - timeout: the list did not settle within $TimeoutMs
+# A matching row below the visible part of the list is scrolled into view once.
+function Wait-PublicFormEntry {
+    param([System.Windows.Automation.AutomationElement]$Root, [int]$OwnerPid, [string]$Name, [int]$TimeoutMs = 8000, [int]$PollMs = 250)
+    $condition = [System.Windows.Automation.OrCondition]::new(
+        [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Hyperlink),
+        [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::DataItem))
+    $formWord = Text-FromCodePoints @(0xC11C,0xC2DD)
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    $lastRows = -1
+    $scrolled = $false
+    while ($true) {
+        $labels = @($Root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition) | Where-Object {
+            $_.Current.ProcessId -eq $OwnerPid -and $_.Current.Name -is [string] -and $_.Current.Name.Trim().Length -gt 0
+        })
+        $exact = @($labels | Where-Object { $_.Current.Name.Trim() -ceq $Name })
+        $visible = @($exact | Where-Object { -not $_.Current.IsOffscreen -and $_.Current.IsEnabled -and $_.Current.BoundingRectangle.Width -gt 0 -and $_.Current.BoundingRectangle.Height -gt 0 })
+        $links = @($visible | Where-Object { $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::Hyperlink })
+        $pick = if ($links.Count -gt 0) { $links } else { $visible }
+        if ($pick.Count -gt 1) { return [pscustomobject]@{ outcome='ambiguous'; entry=$null; elapsedMs=$clock.ElapsedMilliseconds } }
+        if ($pick.Count -eq 1) { return [pscustomobject]@{ outcome='found'; entry=$pick[0]; elapsedMs=$clock.ElapsedMilliseconds } }
+        if ($exact.Count -gt 0 -and -not $scrolled) {
+            $scrolled = $true
+            foreach ($candidate in $exact) {
+                $scroll = $null
+                if ($candidate.TryGetCurrentPattern([System.Windows.Automation.ScrollItemPattern]::Pattern, [ref]$scroll)) { try { $scroll.ScrollIntoView() } catch {} ; break }
+            }
+            Start-Sleep -Milliseconds $PollMs
+            continue
+        }
+        $rows = @($labels | Where-Object { $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::DataItem -and $_.Current.Name.Contains($formWord) }).Count
+        # Rows left over from the previous screen can linger for a moment after the menu press,
+        # so "settled without the form" is only believed after the first second.
+        if ($rows -gt 0 -and $rows -eq $lastRows -and $clock.ElapsedMilliseconds -ge 1000) { return [pscustomobject]@{ outcome='missing'; entry=$null; elapsedMs=$clock.ElapsedMilliseconds } }
+        $lastRows = $rows
+        if ($clock.ElapsedMilliseconds -ge $TimeoutMs) { return [pscustomobject]@{ outcome='timeout'; entry=$null; elapsedMs=$clock.ElapsedMilliseconds } }
+        Start-Sleep -Milliseconds $PollMs
+    }
+}
+
 # K-에듀파인 runs in Edge, whose page cannot be scripted without a debugging port. What Edge
 # does offer is its accessibility tree (the same one UI Automation reads) and its render
 # surface window. Both take a press for the page without the real cursor being moved:
@@ -720,8 +780,13 @@ function Open-RealPublicForm {
         }
         Start-Sleep -Milliseconds 500
     }
-    Start-Sleep -Milliseconds 200
-    $left = @(Get-DescendantByAutomationId -Root $desktop -AutomationId $leftId | Where-Object { $_.Current.ProcessId -eq $ownerPid -and -not $_.Current.IsOffscreen })
+    # The left menu of 문서관리 also arrives after the press; watch for it instead of one look 0.2 s later.
+    $left = @()
+    $leftDeadline = [DateTime]::UtcNow.AddSeconds(4)
+    do {
+        Start-Sleep -Milliseconds 200
+        $left = @(Get-DescendantByAutomationId -Root $desktop -AutomationId $leftId | Where-Object { $_.Current.ProcessId -eq $ownerPid -and -not $_.Current.IsOffscreen })
+    } while ($left.Count -ne 1 -and [DateTime]::UtcNow -lt $leftDeadline)
     if ($left.Count -ne 1) { return [pscustomobject]@{ status='needs-user'; reason='left-tree-unavailable' } }
     # Clicking 기안 toggles its branch, so blindly clicking it collapsed an already open tree
     # and 공용서식 disappeared. Reach for the target first and only expand when it is hidden.
@@ -742,11 +807,14 @@ function Open-RealPublicForm {
     if ($null -eq $item -or -not (Invoke-GuardedElement -Element $item -OwnerPid $ownerPid -Label 'public-form-menu')) {
         return [pscustomobject]@{ status='needs-user'; reason='menu-path-ambiguous' }
     }
-    Start-Sleep -Milliseconds 700
-    $forms = @(Find-ExactNamedElement -Root $desktop -Name $expectedCaption | Where-Object { $_.Current.ProcessId -eq $ownerPid })
-    if ($forms.Count -gt 1) { return [pscustomobject]@{ status='needs-user'; reason='exact-form-selector-ambiguous' } }
-    if ($forms.Count -eq 1) {
-        if (-not (Invoke-GuardedElement -Element $forms[0] -OwnerPid $ownerPid -Label 'form')) { return [pscustomobject]@{ status='needs-user'; reason='exact-form-not-actionable' } }
+    # The list is fetched from the server, so how long it takes to appear depends on the PC, the
+    # network and the moment. A fixed 0.7 s wait followed by a single look made the press succeed
+    # on some PCs and fail on others; the list is now watched until the form shows up.
+    $list = Wait-PublicFormEntry -Root (Get-TopLevelElement -Element $top[0]) -OwnerPid $ownerPid -Name $expectedCaption
+    $script:pressTrace.Add("form-list:$($list.outcome):$($list.elapsedMs)ms")
+    if ($list.outcome -eq 'ambiguous') { return [pscustomobject]@{ status='needs-user'; reason='exact-form-selector-ambiguous' } }
+    if ($list.outcome -eq 'found') {
+        if (-not (Invoke-GuardedElement -Element $list.entry -OwnerPid $ownerPid -Label 'form')) { return [pscustomobject]@{ status='needs-user'; reason='exact-form-not-actionable' } }
         return [pscustomobject]@{ status='ok'; selector='uia'; method=$script:lastPressMethod }
     }
     # The freshness check compares the window's rectangle against the one in the screenshot, so

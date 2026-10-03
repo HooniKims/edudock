@@ -4,6 +4,7 @@ const { spawn: nodeSpawn } = require('node:child_process');
 const { NativeHelperWorker } = require('./native-worker.cjs');
 
 const EXPECTED_FORM_CAPTION = '일반기안문 서식(결재4인,협조4인)';
+const OPEN_PUBLIC_FORM_TIMEOUT_MS = 30000;
 const EXPECTED_WXS_PATH = 'c:\\program files (x86)\\kedu\\wxsclient.exe';
 const REQUIRED_MARKERS = Object.freeze(['Shell Embedding', 'Shell DocObject View', 'Internet Explorer_Server', 'AfxOleControl120u', 'HwpMainEditWnd']);
 
@@ -386,11 +387,17 @@ class NativeDraftHandoffBridge {
     this.workerRunner?.stop();
   }
 
+  // Opening 공용서식 presses the menu, waits for the server-fetched list and may fall back to OCR,
+  // all in one request; on a slow PC that ran past the usual 10 s and failed at random.
+  timeoutFor(request) {
+    return request?.command === 'open-public-form' ? Math.max(this.timeoutMs, OPEN_PUBLIC_FORM_TIMEOUT_MS) : this.timeoutMs;
+  }
+
   run(request, operation = {}) {
     if (operation.cancelled === true) return Promise.reject(new DraftHandoffError('cancelled', 'Native draft handoff was cancelled'));
     if (this.workerRunner) {
       const body = JSON.stringify(request);
-      return this.workerRunner.run(body, operation)
+      return this.workerRunner.run(body, operation, this.timeoutFor(request))
         .then(line => {
           try {
             return validateNativeResponse(JSON.parse(line));
@@ -441,7 +448,7 @@ class NativeDraftHandoffBridge {
         child.kill();
         finish(new DraftHandoffError('cancelled', 'Native draft handoff was cancelled'));
       };
-      timer = setTimeout(() => { child.kill(); finish(new DraftHandoffError('timeout', 'Native draft handoff helper timed out')); }, this.timeoutMs);
+      timer = setTimeout(() => { child.kill(); finish(new DraftHandoffError('timeout', 'Native draft handoff helper timed out')); }, this.timeoutFor(request));
       unsubscribe = typeof operation.onCancel === 'function' ? operation.onCancel(cancelOwnedHelper) : null;
       if (operation.cancellationPromise && typeof operation.cancellationPromise.then === 'function') {
         Promise.resolve(operation.cancellationPromise).then(cancelOwnedHelper, cancelOwnedHelper);
