@@ -132,6 +132,11 @@ function createNotchWindow({ BrowserWindow, screen, powerMonitor, settings, prel
   });
 
   onWindow(window, 'notch');
+  // minimizable:false does not stop "Show desktop" (Win+D) from minimizing the widget, after which
+  // it was simply gone. Put it straight back, without taking the focus from what the teacher uses.
+  window.on('minimize', () => {
+    setTimeout(() => { if (!window.isDestroyed() && window.isMinimized()) window.showInactive(); }, 0);
+  });
   const mouseFallback = shouldUseMouseFallback(process.platform, typeof window.setShape === 'function');
   window.setMenu(null);
   window.setAlwaysOnTop(settings.alwaysOnTop, 'floating');

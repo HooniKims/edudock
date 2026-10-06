@@ -57,6 +57,9 @@ function createNotchPopover({ BrowserWindow, screen, preload, onWindow, onPresen
     created.loadFile(path.join(__dirname, '../renderer/popup.html'));
     created.webContents.on('did-finish-load', () => { if (pending && popup === created && !created.isDestroyed()) created.webContents.send('popover-data', pending.data); });
     created.on('hide', () => { if (popup === created) { current = null; onPresence(false); } });
+    // "Show desktop" (Win+D) minimizes the bubble instead of hiding it, so no 'hide' came and the
+    // widget stayed held open for a bubble nobody could see. A minimized bubble is a closed one.
+    created.on('minimize', () => { if (popup === created && !created.isDestroyed()) created.hide(); });
     created.on('closed', () => { if (popup === created) { popup = null; onPresence(false); } });
     return created;
   }

@@ -451,6 +451,28 @@ app.whenReady().then(() => {
     onWindow: registerWindow,
     onPresence: open => notch.dispatch('popup', open),
   });
+  // Safety net for the widget staying open with the cursor long gone. What holds it open is a
+  // flag (bubble shown, pointer inside); if the event that clears one never arrives — a bubble
+  // minimized by "Show desktop", a pointer-leave lost while the window ignored the mouse — the
+  // widget stayed expanded until restarted. Once a second, a flag the screen contradicts is
+  // cleared: no bubble on screen, or the cursor away from the widget for two checks running.
+  let pointerAwayChecks = 0;
+  const foldWatch = setInterval(() => {
+    if (!notch?.window || notch.window.isDestroyed()) return;
+    const held = notch.interaction;
+    if (!held || held.visualState !== 'expanded') { pointerAwayChecks = 0; return; }
+    const bubble = popover?.window;
+    if (held.popupOpen && (!bubble || bubble.isDestroyed() || !bubble.isVisible() || bubble.isMinimized())) notch.dispatch('popup', false);
+    if (held.pointerInside && !held.placing) {
+      const point = screen.getCursorScreenPoint();
+      const bounds = notch.window.getBounds();
+      const margin = 8;
+      const inside = point.x >= bounds.x - margin && point.y >= bounds.y - margin && point.x < bounds.x + bounds.width + margin && point.y < bounds.y + bounds.height + margin;
+      pointerAwayChecks = inside ? 0 : pointerAwayChecks + 1;
+      if (pointerAwayChecks >= 2) { pointerAwayChecks = 0; notch.dispatch('pointer', false); }
+    } else pointerAwayChecks = 0;
+  }, 1000);
+  foldWatch.unref?.();
 
   const ordinaryEdgeBridge = new NativeOrdinaryEdgeBridge({
     helperPath: resolveOrdinaryEdgeHelper({ isPackaged: app.isPackaged, resourcesPath: process.resourcesPath }),
