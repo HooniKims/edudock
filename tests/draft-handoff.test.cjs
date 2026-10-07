@@ -724,3 +724,16 @@ test('the 공용서식 list is watched, labels are compared without their leadin
   assert.equal(bridge.timeoutFor({ command: 'open-public-form' }), 30000);
   assert.equal(bridge.timeoutFor({ command: 'inspect-editors' }), 10000);
 });
+
+test('without the RenderWidgetHost child window (Edge 154.0.4258.62) presses go to the browser window itself', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  for (const file of ['edufine-draft.ps1', 'neis-tasks.ps1']) {
+    const helper = fs.readFileSync(path.join(__dirname, '..', 'src', 'native', file), 'utf8');
+    assert.match(helper, /if \(found != IntPtr\.Zero\) return found;/, file);
+    assert.match(helper, /if \(topClass\.ToString\(\)\.StartsWith\("Chrome_WidgetWin"\) && \(int\)topPid == expectedPid\) return top;/, file);
+  }
+  // The form list's own rows have no automation id; menu cells that also say 서식 must not count.
+  const draft = fs.readFileSync(path.join(__dirname, '..', 'src', 'native', 'edufine-draft.ps1'), 'utf8');
+  assert.match(draft, /-not \(\[string\]\$_\.Current\.AutomationId\)\.StartsWith\('mainframe\.'\)/);
+});

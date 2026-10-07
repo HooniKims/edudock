@@ -277,7 +277,14 @@ public static class EduDockNeisAccessibility {
       if ((int)pid != expectedPid) return true;
       found = hwnd; return false;
     }, IntPtr.Zero);
-    return found;
+    if (found != IntPtr.Zero) return found;
+    // Edge 154.0.4258.62 (October 2026) no longer creates the RenderWidgetHost child window; the
+    // page's input and accessibility are then served by the browser's own top-level window.
+    StringBuilder topClass = new StringBuilder(256);
+    GetClassName(top, topClass, 256);
+    uint topPid; GetWindowThreadProcessId(top, out topPid);
+    if (topClass.ToString().StartsWith("Chrome_WidgetWin") && (int)topPid == expectedPid) return top;
+    return IntPtr.Zero;
   }
 
   static string NameOf(IAccessible element, int childId) {

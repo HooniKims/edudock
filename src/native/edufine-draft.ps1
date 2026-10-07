@@ -347,7 +347,14 @@ function Wait-PublicFormEntry {
             Start-Sleep -Milliseconds $PollMs
             continue
         }
-        $rows = @($labels | Where-Object { $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::DataItem -and $_.Current.Name.Contains($formWord) }).Count
+        # Rows of the form list only. The left menu and the top drop-down menu ("공용서식",
+        # "샘플서식" …) also carry the word 서식, and counting them made a list that had not arrived
+        # yet look settled at once. The list's own rows have no automation id; the menus' cells do
+        # ("mainframe.…").
+        $rows = @($labels | Where-Object {
+            $_.Current.ControlType -eq [System.Windows.Automation.ControlType]::DataItem -and $_.Current.Name.Contains($formWord) -and
+            -not ([string]$_.Current.AutomationId).StartsWith('mainframe.')
+        }).Count
         # Rows left over from the previous screen can linger for a moment after the menu press,
         # so "settled without the form" is only believed after the first second.
         if ($rows -gt 0 -and $rows -eq $lastRows -and $clock.ElapsedMilliseconds -ge 1000) { return [pscustomobject]@{ outcome='missing'; entry=$null; elapsedMs=$clock.ElapsedMilliseconds } }
@@ -393,7 +400,14 @@ public static class EduDockDraftPageInput {
       if ((int)pid != expectedPid) return true;
       found = hwnd; return false;
     }, IntPtr.Zero);
-    return found;
+    if (found != IntPtr.Zero) return found;
+    // Edge 154.0.4258.62 (October 2026) no longer creates the RenderWidgetHost child window; the
+    // page's input and accessibility are then served by the browser's own top-level window.
+    StringBuilder topClass = new StringBuilder(256);
+    GetClassName(top, topClass, 256);
+    uint topPid; GetWindowThreadProcessId(top, out topPid);
+    if (topClass.ToString().StartsWith("Chrome_WidgetWin") && (int)topPid == expectedPid) return top;
+    return IntPtr.Zero;
   }
 
   static string NameOf(IAccessible element, int childId) {
