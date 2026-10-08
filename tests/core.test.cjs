@@ -45,7 +45,7 @@ test('legacy login settings are removed while safe window settings migrate',()=>
  const fs=require('node:fs'),os=require('node:os'),path=require('node:path');const {loadSettings}=require('../src/settings.cjs');
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'edudock-settings-'));
  fs.writeFileSync(path.join(directory,'settings.json'),JSON.stringify({credentialPath:'C:/legacy.env',useAccountPasswordForCertificate:true,certificateHint:'legacy user',autoLogin:true,orientation:'horizontal',alwaysOnTop:false,dock:'top',bounds:{x:10,y:20,width:640,height:400}}));
-  const actual=loadSettings(directory);assert.deepEqual(actual,{schemaVersion:4,autoLogin:false,guideCompleted:false,passwordSaved:false,certificateDriveHint:null,alwaysOnTop:false,opacity:1,placement:{edge:'top',monitorId:null,offsets:{top:0.5,right:0.5,bottom:0.5,left:0.5},scale:1,lastEdges:{horizontal:'top',vertical:'right'}},displayMode:'expanded',buttons:['neis','edufine','attendance','trip','draft','compose']});
+  const actual=loadSettings(directory);assert.deepEqual(actual,{schemaVersion:4,autoLogin:false,launchAtLogin:true,guideCompleted:false,passwordSaved:false,certificateDriveHint:null,alwaysOnTop:false,opacity:1,placement:{edge:'top',monitorId:null,offsets:{top:0.5,right:0.5,bottom:0.5,left:0.5},scale:1,lastEdges:{horizontal:'top',vertical:'right'}},displayMode:'expanded',buttons:['neis','edufine','attendance','trip','draft','compose']});
  fs.unlinkSync(path.join(directory,'settings.json'));fs.rmdirSync(directory);
 });
 test('fresh settings default to the right-edge vertical notch',()=>{

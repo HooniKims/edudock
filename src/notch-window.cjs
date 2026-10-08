@@ -97,6 +97,9 @@ function displayForPlacement(screen, placement) {
 
 function createNotchWindow({ BrowserWindow, screen, powerMonitor, settings, preload, onWindow, onInteraction, onPlacementCommit, onPlacementPreview }) {
   let currentSettings = settings;
+  // The place the teacher chose. currentSettings.placement is where the widget is shown, which
+  // differs while the chosen monitor is not connected; a returning monitor brings it back here.
+  let wantedPlacement = settings.placement;
   let progress = settings.displayMode === 'expanded' ? 1 : 0;
   let currentShape = getNotchShape({ edge: settings.placement.edge, progress, scale: settings.placement.scale });
   let fitted = fitShapeToCanvas(currentShape);
@@ -245,24 +248,33 @@ function createNotchWindow({ BrowserWindow, screen, powerMonitor, settings, prel
   function apply(nextSettings = currentSettings) {
     if (placementSession) cancelPlacement();
     currentSettings = nextSettings;
-    const recovered = recoverPlacement(screen.getAllDisplays(), currentSettings.placement, screen.getPrimaryDisplay());
+    wantedPlacement = nextSettings.placement;
+    const recovered = recoverPlacement(screen.getAllDisplays(), wantedPlacement, screen.getPrimaryDisplay());
     if (recovered.recovered) currentSettings = { ...currentSettings, placement: recovered.placement };
     if (window.isDestroyed()) return null;
     window.setAlwaysOnTop(nextSettings.alwaysOnTop, 'floating');
     applyOpacity(window, nextSettings.opacity);
     interaction.mode(nextSettings.displayMode);
     const applied = renderProgress(progress);
-    if (recovered.recovered) onPlacementCommit?.(recovered.placement, 'placement-fit');
+    keepRecovered(recovered, 'placement-fit');
     return applied;
+  }
+
+  // A fitted scale or a renumbered monitor is the same place and is saved; a stand-in for a
+  // missing monitor is only shown.
+  function keepRecovered(recovered, reason) {
+    if (!recovered.recovered || recovered.missing) return;
+    wantedPlacement = recovered.placement;
+    onPlacementCommit?.(recovered.placement, reason);
   }
 
   function recover() {
     if (window.isDestroyed()) return;
     if (placementSession) cancelPlacement();
-    const recovered = recoverPlacement(screen.getAllDisplays(), currentSettings.placement, screen.getPrimaryDisplay());
+    const recovered = recoverPlacement(screen.getAllDisplays(), wantedPlacement, screen.getPrimaryDisplay());
     currentSettings = { ...currentSettings, placement: recovered.placement };
     renderProgress(progress);
-    if (recovered.recovered) onPlacementCommit?.(recovered.placement, 'display-recovery');
+    keepRecovered(recovered, 'display-recovery');
   }
 
   function beginPlacement(request) {
@@ -300,6 +312,7 @@ function createNotchWindow({ BrowserWindow, screen, powerMonitor, settings, prel
     placementSession = null;
     if (placementPreviewing) { placementPreviewing = false; onPlacementPreview?.({ active: false }); }
     if (result.ok) currentSettings = { ...currentSettings, placement: result.placement };
+    if (result.ok && commit) wantedPlacement = result.placement;
     renderProgress(1);
     interaction.placement(false);
     return { ...result, bounds: window.isDestroyed() ? null : window.getBounds() };
@@ -333,6 +346,7 @@ function createNotchWindow({ BrowserWindow, screen, powerMonitor, settings, prel
       }
       const recovered = recoverPlacement(screen.getAllDisplays(), next, screen.getPrimaryDisplay());
       currentSettings = { ...currentSettings, placement: recovered.placement };
+      wantedPlacement = recovered.placement;
       const applied = renderProgress(1);
       onPlacementCommit?.(recovered.placement, `keyboard-${request.mode}`);
       return { ok: true, placement: recovered.placement, bounds: applied?.bounds };

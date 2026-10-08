@@ -6,6 +6,7 @@ const defaultOffsets = () => ({ top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 });
 const defaults = () => ({
   schemaVersion: 4,
   autoLogin: false,
+  launchAtLogin: true,
   guideCompleted: false,
   passwordSaved: false,
   certificateDriveHint: null,
@@ -32,6 +33,12 @@ function cleanPlacement(value = {}) {
       if (Number.isFinite(value.offsets[edge])) placement.offsets[edge] = finiteInRange(value.offsets[edge], 0, 1, 0.5);
     }
   }
+  // Where the monitor sat when the widget was put there: Windows can give a monitor a new id after a
+  // restart or a driver update, and this still finds it.
+  const area = value.monitorBounds;
+  if (area && typeof area === 'object' && ['x', 'y', 'width', 'height'].every(key => Number.isInteger(area[key])) && area.width > 0 && area.height > 0) {
+    placement.monitorBounds = { x: area.x, y: area.y, width: area.width, height: area.height };
+  }
   if (value.lastEdges && typeof value.lastEdges === 'object') {
     const horizontal = ['top', 'bottom'].includes(value.lastEdges.horizontal) ? value.lastEdges.horizontal : null;
     const vertical = ['left', 'right'].includes(value.lastEdges.vertical) ? value.lastEdges.vertical : null;
@@ -55,6 +62,7 @@ function cleanPatch(patch) {
   // Kept above 0.3 so the notch can never become invisible and unclickable.
   if (Number.isFinite(patch.opacity)) result.opacity = Math.round(finiteInRange(patch.opacity, 0.3, 1, 1) * 100) / 100;
   if (typeof patch.autoLogin === 'boolean') result.autoLogin = patch.autoLogin;
+  if (typeof patch.launchAtLogin === 'boolean') result.launchAtLogin = patch.launchAtLogin;
   if (typeof patch.guideCompleted === 'boolean') result.guideCompleted = patch.guideCompleted;
   // Only a marker that a secret exists; the secret itself lives encrypted in its own file.
   if (typeof patch.passwordSaved === 'boolean') result.passwordSaved = patch.passwordSaved;

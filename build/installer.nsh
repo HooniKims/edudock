@@ -17,6 +17,9 @@
 ; go too. An update also runs the uninstaller first; it never asks and never deletes anything.
 !macro customUnInstall
   ${ifNot} ${isUpdated}
+    ; "Windows 시작할 때 실행" entry (src/login-item.cjs); an update keeps it.
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "EduDock"
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run" "EduDock"
     MessageBox MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2 "설정, 저장한 초안, 저장한 인증서 비밀번호도 함께 지울까요?$\r$\n$\r$\n[예] 모두 지웁니다.$\r$\n[아니요] 남겨 두어, 다시 설치하면 그대로 쓸 수 있습니다." /SD IDNO IDNO keepUserData
       ${if} $installMode == "all"
         SetShellVarContext current

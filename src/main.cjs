@@ -17,6 +17,7 @@ const { DraftHandoffCoordinator, NativeDraftHandoffBridge } = require('./draft-h
 const { createUpdater, RELEASE_REPOSITORY } = require('./updater.cjs');
 const { createSavedDrafts } = require('./saved-drafts.cjs');
 const { createDiagnosticLog } = require('./diagnostic-log.cjs');
+const { createLoginItem, loginItemMode, launchCommand, AUTOSTART_ARG } = require('./login-item.cjs');
 
 let notch;
 let auxiliary;
@@ -42,6 +43,7 @@ let secrets = null;
 let storedPasswordLost = false;
 let diagnosticLog = null;
 let nativeBridges = [];
+let loginItem = null;
 
 function guideAnchorButton(step) {
   return step?.kind === 'button' ? step.button : null;
@@ -113,7 +115,7 @@ function state() {
   }
   const displays = screen.getAllDisplays().length ? describeDisplays(screen.getAllDisplays(), screen.getPrimaryDisplay().id) : [];
   const placementLabel = settings?.placement && displays.length ? describePlacement(displays, settings.placement, screen.getPrimaryDisplay().id) : '';
-  return { settings, placementMaxScale, displays, placementLabel, authenticationPending: Boolean(automation?.operation), passwordStorageAvailable: Boolean(secrets?.available()), update: updater?.state || null, operation: currentStatus, interaction: notch?.interaction || null, version: app.getVersion() };
+  return { settings, placementMaxScale, displays, placementLabel, authenticationPending: Boolean(automation?.operation), passwordStorageAvailable: Boolean(secrets?.available()), update: updater?.state || null, operation: currentStatus, interaction: notch?.interaction || null, loginItem: loginItem?.state || null, version: app.getVersion() };
 }
 
 function registerWindow(window, role) {
@@ -232,19 +234,27 @@ function hideNotch() {
   return { ok: true };
 }
 
+// Saved with the place, so a monitor that Windows renumbers is still recognised by where it sits.
+function withMonitorArea(placement) {
+  const display = screen.getAllDisplays().find(candidate => String(candidate.id) === String(placement.monitorId));
+  return display ? { ...placement, monitorBounds: { ...display.bounds } } : placement;
+}
+
 function applySettings(patch) {
   const cleaned = cleanPatch(patch);
   if (cleaned.autoLogin === true && settings.passwordSaved !== true) throw new Error('먼저 인증서 비밀번호를 저장해 주세요. 저장하면 자동 로그인이 켜집니다.');
+  // Starting with Windows also writes the registry, so it goes through its own request.
+  delete cleaned.launchAtLogin;
   const cleanedPlacement = cleaned.placement || {};
   settings = sanitizedSettings({
     ...settings,
     ...cleaned,
-    placement: {
+    placement: withMonitorArea({
       ...settings.placement,
       ...cleanedPlacement,
       offsets: { ...settings.placement.offsets, ...(cleanedPlacement.offsets || {}) },
       lastEdges: { ...settings.placement.lastEdges, ...(cleanedPlacement.lastEdges || {}) },
-    },
+    }),
   });
   persist();
   if (Object.hasOwn(cleaned, 'autoLogin')) {
@@ -385,7 +395,7 @@ function answerUpdate(answer) {
 }
 
 function commitPlacement(placement) {
-  settings = sanitizedSettings({ ...settings, placement });
+  settings = sanitizedSettings({ ...settings, placement: withMonitorArea(placement) });
   persist();
   publish();
   return state();
@@ -406,7 +416,7 @@ app.on('second-instance', () => {
 app.whenReady().then(() => {
   settings = loadSettings(app.getPath('userData'));
   diagnosticLog = createDiagnosticLog({ directory: app.getPath('userData') });
-  diagnosticLog.append('app-start', { version: app.getVersion(), detail: `${process.windowsStore ? 'store' : app.isPackaged ? 'installed' : 'development'}` });
+  diagnosticLog.append('app-start', { version: app.getVersion(), detail: `${process.windowsStore ? 'store' : app.isPackaged ? 'installed' : 'development'}${process.argv.includes(AUTOSTART_ARG) ? ' login' : ''}` });
   if (settings.autoLogin && settings.passwordSaved !== true) settings = sanitizedSettings({ ...settings, autoLogin: false });
   try { secrets = new SecretStore({ directory: app.getPath('userData'), safeStorage }); } catch { secrets = null; }
   // A stored password this copy can no longer open (its key lives in this folder's Local State,
@@ -419,6 +429,11 @@ app.whenReady().then(() => {
     storedPasswordLost = true;
   }
   persist();
+  loginItem = createLoginItem({
+    mode: loginItemMode({ platform: process.platform, isPackaged: app.isPackaged, windowsStore: Boolean(process.windowsStore) }),
+    command: launchCommand({ execPath: process.execPath, env: process.env }),
+  });
+  loginItem.sync(settings.launchAtLogin === true).then(publish, () => {});
 
   notch = createNotchWindow({
     BrowserWindow,
@@ -525,6 +540,16 @@ app.whenReady().then(() => {
 
   handle('state', ['notch', 'auxiliary'], state);
   handle('settings', ['notch', 'auxiliary'], applySettings);
+  handle('launch-at-login', ['auxiliary'], async enabled => {
+    if (typeof enabled !== 'boolean') throw new Error('설정값이 올바르지 않습니다.');
+    settings = sanitizedSettings({ ...settings, launchAtLogin: enabled });
+    persist();
+    await loginItem?.set(enabled);
+    publish();
+    return state();
+  });
+  // The Store copy starts through its package's startup task, which only Windows Settings switches.
+  handle('open-startup-settings', ['auxiliary'], () => shell.openExternal('ms-settings:startupapps'));
   // Only the view name crosses IPC. Passing showAuxiliary itself handed it the IPC event as its
   // second argument, which was then sent to the renderer and crashed the app (0.10.5–0.10.7).
   handle('open-auxiliary', ['notch', 'auxiliary'], view => showAuxiliary(view));

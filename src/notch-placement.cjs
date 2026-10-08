@@ -63,33 +63,29 @@ function clonePlacement(placement) {
   };
 }
 
+function sameArea(left, right) {
+  return Boolean(left && right) && ['x', 'y', 'width', 'height'].every(key => left[key] === right[key]);
+}
+
+// `missing` marks a stand-in: the saved monitor is not connected (or not yet, early in a login),
+// so the widget shows on the primary one at the same edge and spot, and the saved place is kept
+// for when that monitor comes back instead of being overwritten.
 function recoverPlacement(displays, placement, primaryDisplay) {
   const selected = displays.find(display => displayId(display) === String(placement.monitorId));
   if (selected) {
     const next = clonePlacement(placement);
     next.scale = fitScaleToDisplay(selected, next.edge, next.scale);
-    return { placement: next, display: selected, recovered: next.scale !== placement.scale };
+    return { placement: next, display: selected, recovered: next.scale !== placement.scale, missing: false };
   }
   const primary = primaryDisplay || displays[0];
   if (!primary) throw new Error('No display is available for notch placement.');
-  if (placement.monitorId === null || placement.monitorId === undefined) {
-    const next = clonePlacement(placement);
-    next.monitorId = displayId(primary);
-    next.scale = fitScaleToDisplay(primary, next.edge, next.scale);
-    return { placement: next, display: primary, recovered: true };
-  }
-  return {
-    placement: {
-      ...clonePlacement(placement),
-      monitorId: displayId(primary),
-      edge: 'right',
-      offsets: { ...placement.offsets, right: 0.5 },
-      lastEdges: { ...placement.lastEdges, vertical: 'right' },
-      scale: fitScaleToDisplay(primary, 'right', placement.scale),
-    },
-    display: primary,
-    recovered: true,
-  };
+  const unbound = placement.monitorId === null || placement.monitorId === undefined;
+  const renumbered = unbound ? null : displays.find(display => sameArea(display.bounds, placement.monitorBounds));
+  const display = renumbered || primary;
+  const next = clonePlacement(placement);
+  next.monitorId = displayId(display);
+  next.scale = fitScaleToDisplay(display, next.edge, next.scale);
+  return { placement: next, display, recovered: true, missing: !unbound && !renumbered };
 }
 
 function resolvePlacement(displays, placement, shape, primaryDisplay = displays[0]) {

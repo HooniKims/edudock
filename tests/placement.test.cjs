@@ -42,14 +42,49 @@ test('resolvePlacement uses workArea boundaries, including taskbar inset and neg
   });
 });
 
-test('missing monitor recovers to visible primary right-center safe default', () => {
+test('missing monitor shows on the primary at the same edge and spot, marked as a stand-in', () => {
   const recovered = recoverPlacement(displays, placement({ monitorId: 'removed', edge: 'bottom' }), displays[0]);
   assert.equal(recovered.recovered, true);
-  assert.deepEqual(recovered.placement, {
-    ...placement({ monitorId: '1', edge: 'right' }),
-    offsets: { top: 0.2, right: 0.5, bottom: 0.8, left: 0.35 },
-    lastEdges: { horizontal: 'bottom', vertical: 'right' },
-  });
+  assert.equal(recovered.missing, true);
+  assert.equal(recovered.display, displays[0]);
+  assert.deepEqual(recovered.placement, placement({ monitorId: '1', edge: 'bottom' }));
+});
+
+test('a monitor Windows renumbered is found again by where it sits, and is not a stand-in', () => {
+  const placed = [
+    { id: 1, bounds: { x: 0, y: 0, width: 1920, height: 1080 }, workArea: { x: 0, y: 0, width: 1920, height: 1040 } },
+    { id: 77, bounds: { x: 1920, y: 0, width: 2560, height: 1440 }, workArea: { x: 1920, y: 0, width: 2560, height: 1400 } },
+  ];
+  const saved = placement({ monitorId: '5', edge: 'top', monitorBounds: { x: 1920, y: 0, width: 2560, height: 1440 } });
+  const recovered = recoverPlacement(placed, saved, placed[0]);
+  assert.equal(recovered.missing, false);
+  assert.equal(recovered.display, placed[1]);
+  assert.equal(recovered.placement.monitorId, '77');
+  assert.equal(recovered.placement.edge, 'top');
+  assert.equal(recovered.placement.offsets.top, 0.2);
+  // Nothing at the saved spot: a stand-in on the primary.
+  const gone = recoverPlacement(placed, { ...saved, monitorBounds: { x: -1280, y: 0, width: 1280, height: 1024 } }, placed[0]);
+  assert.equal(gone.missing, true);
+  assert.equal(gone.placement.monitorId, '1');
+  assert.equal(gone.placement.edge, 'top');
+});
+
+test('settings keep the monitor area only when it is a whole rectangle', () => {
+  const kept = sanitizedSettings({ schemaVersion: 4, placement: { monitorId: '5', monitorBounds: { x: -1920, y: 0, width: 1920, height: 1080 } } });
+  assert.deepEqual(kept.placement.monitorBounds, { x: -1920, y: 0, width: 1920, height: 1080 });
+  assert.equal(sanitizedSettings({ placement: { monitorBounds: { x: 0, y: 0, width: 0, height: 1080 } } }).placement.monitorBounds, undefined);
+  assert.equal(sanitizedSettings({ placement: { monitorBounds: { x: 0.5, y: 0, width: 10, height: 10 } } }).placement.monitorBounds, undefined);
+  assert.equal(sanitizedSettings({ placement: { monitorBounds: 'left' } }).placement.monitorBounds, undefined);
+});
+
+test('the widget window only saves a recovered place when it is the same monitor', () => {
+  const source = require('node:fs').readFileSync(require.resolve('../src/notch-window.cjs'), 'utf8');
+  assert.match(source, /if \(!recovered\.recovered \|\| recovered\.missing\) return;/);
+  // Recovery starts from the place the teacher chose, not from the stand-in on screen.
+  assert.match(source, /recoverPlacement\(screen\.getAllDisplays\(\), wantedPlacement, screen\.getPrimaryDisplay\(\)\)/);
+  assert.doesNotMatch(source, /recoverPlacement\(screen\.getAllDisplays\(\), currentSettings\.placement/);
+  const main = require('node:fs').readFileSync(require.resolve('../src/main.cjs'), 'utf8');
+  assert.match(main, /settings = sanitizedSettings\(\{ \.\.\.settings, placement: withMonitorArea\(placement\) \}\);/);
 });
 
 test('null monitor binds to primary without discarding the migrated edge, offset, or scale', () => {

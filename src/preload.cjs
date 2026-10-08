@@ -6,7 +6,7 @@ function listen(channel, callback) {
   return () => ipcRenderer.removeListener(channel, listener);
 }
 contextBridge.exposeInMainWorld('portal', {
-  getState: invoke('state'), settings: invoke('settings'), window: invoke('window'), resize: invoke('resize'),
+  getState: invoke('state'), settings: invoke('settings'), launchAtLogin: invoke('launch-at-login'), openStartupSettings: invoke('open-startup-settings'), window: invoke('window'), resize: invoke('resize'),
   openMenu: invoke('open-menu'), generateDraft: invoke('generate-draft'), draftsList: invoke('drafts-list'), draftsSave: invoke('drafts-save'), draftsRemove: invoke('drafts-remove'), copy: invoke('copy'), saveDraft: invoke('save-draft'),
   openAuxiliary: invoke('open-auxiliary'), fitWindow: invoke('fit-window'), cancelAuth: invoke('cancel-auth'), retryAuth: invoke('retry-auth'), getDiagnostics: invoke('diagnostics'), saveReport: invoke('save-report'),
   notchInteraction: invoke('notch-interaction'), showPopover: invoke('show-popover'), hidePopover: invoke('hide-popover'),

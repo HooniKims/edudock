@@ -60,6 +60,7 @@ function renderState(next) {
       ? '켜짐 · 버튼을 누르면 저장된 비밀번호로 바로 로그인해 그 화면까지 가요. 이미 로그인돼 있으면 바로 이동해요.'
       : '꺼짐 · 버튼을 누르면 로그인 창을 열고, 비밀번호는 직접 입력해요.';
   document.querySelector('.pin-button').setAttribute('aria-pressed', String(Boolean(next.settings.alwaysOnTop)));
+  renderLaunchAtLogin(next.loginItem);
   renderMonitorMap(next);
   renderUpdate(next.update, next.version);
   all('button[data-display-mode]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.displayMode === (next.settings.displayMode || 'auto'))));
@@ -70,6 +71,24 @@ function renderState(next) {
   element('placement-scale-value').textContent = `${Math.min(scale, maximumScale)}%`;
   element('login-status-label').textContent = next.authenticationPending ? '공식 인증서 로그인을 기다리는 중' : 'Edge에서 안전하게 로그인';
   element('version').textContent = `업무 곁 · ${next.version || '0.1.0'}`;
+}
+
+// The switch shows what Windows will actually do, so an entry switched off in Task Manager reads
+// as off here too. The Store copy is switched in Windows Settings instead.
+function renderLaunchAtLogin(login) {
+  const mode = login?.mode || 'development';
+  const self = mode === 'self';
+  element('launch-at-login').hidden = mode === 'store';
+  element('launch-at-login').disabled = !self;
+  element('launch-at-login').checked = self && login.enabled === true;
+  element('open-startup-settings').hidden = mode !== 'store';
+  element('launch-help').textContent = mode === 'store'
+    ? 'Windows 설정의 시작 앱에서 켜고 끌 수 있어요.'
+    : !self
+      ? '설치한 프로그램에서만 쓸 수 있어요.'
+      : login.enabled
+        ? '켜짐 · 컴퓨터를 켜면 위젯이 저절로 떠요.'
+        : '꺼짐 · 컴퓨터를 켠 뒤 직접 실행해요.';
 }
 
 function showView(name) {
@@ -119,6 +138,15 @@ async function updateSettings(patch) {
   catch (error) { renderState(state); report(error); }
 }
 element('always-on-top').addEventListener('change', (event) => updateSettings({ alwaysOnTop: event.target.checked }));
+element('launch-at-login').addEventListener('change', async (event) => {
+  const enabled = event.target.checked;
+  try {
+    renderState(await invoke('launchAtLogin', enabled));
+    if (state.loginItem?.enabled === enabled) status(enabled ? '이제 컴퓨터를 켜면 위젯이 저절로 떠요.' : 'Windows를 시작할 때 실행하지 않아요.', 'success');
+    else status('Windows 시작 프로그램 설정을 바꾸지 못했어요.', 'error');
+  } catch (error) { renderState(state); report(error); }
+});
+element('open-startup-settings').addEventListener('click', () => invoke('openStartupSettings').catch(report));
 element('auto-login').addEventListener('change', async (event) => {
   const enabled = event.target.checked;
   await updateSettings({ autoLogin: enabled });
