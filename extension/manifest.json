@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "업무 곁 세션 유지",
+  "version": "1.1.0",
+  "default_locale": "ko",
+  "description": "열어 둔 업무포털·K-에듀파인 탭의 세션을 4분마다 연장합니다. 나이스 기본 세션 유지는 사이트 접근 허용 후 선택할 수 있습니다.",
+  "permissions": [
+    "alarms",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://sen.eduptl.kr/*",
+    "https://klef.sen.go.kr/*"
+  ],
+  "optional_host_permissions": ["https://sen.neis.go.kr/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "업무 곁 세션 유지",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon-16.png",
+      "32": "icon-32.png",
+      "48": "icon-48.png",
+      "128": "icon-128.png"
+    }
+  },
+  "icons": {
+    "16": "icon-16.png",
+    "32": "icon-32.png",
+    "48": "icon-48.png",
+    "128": "icon-128.png"
+  }
+}

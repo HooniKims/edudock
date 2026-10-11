@@ -28,5 +28,5 @@ desktop.ini
 .vscode/
 .idea/
 
-# Edge 세션 유지 확장 — 로컬에서만 개발 중(아직 올리지 않음)
-extension/
+# Superseded local extension experiments
+extension/archive/
