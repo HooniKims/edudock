@@ -548,6 +548,34 @@ test('a certificate password is never echoed back in the helper response', () =>
   assert.equal(raw.includes('sup3r-s3cret'), false, 'the secret must not appear in helper output');
 });
 
+test('the app framing (base64 JSON, a dot, base64 password) is read and the secret checked without echoing it', () => {
+  const region = { verified: true, drives: [], rows: [{ header: true, visible: true, childCellCount: 4, selectableCellCount: 0, selected: false, selectionAvailable: false, actionElement: null }] };
+  const fixture = { windows: [windowFixture({ certificateRegion: region })] };
+  const line = secret => `${Buffer.from(JSON.stringify({ command: 'invoke', target: target(), action: 'submit-certificate-password' }), 'utf8').toString('base64')}.${Buffer.from(secret, 'utf8').toString('base64')}`;
+  const accepted = runBridge(line('sup3r-s3cret'), fixture);
+  assert.notEqual(accepted.output.status, 'error', 'a usable secret after the dot passes validation');
+  assert.equal(accepted.output.invoked, false, 'no selected certificate row, so nothing is typed');
+  assert.equal(accepted.raw.includes('sup3r-s3cret'), false);
+  assert.equal(accepted.raw.includes(Buffer.from('sup3r-s3cret').toString('base64')), false);
+  assert.equal(runBridge(line('x'.repeat(257)), fixture).output.status, 'error');
+});
+
+test('the password never passes a cmdlet, a script parameter, or a focus that left the password box', () => {
+  const { readFileSync } = require('node:fs');
+  const serve = readFileSync(path.join(repo, 'src', 'native', 'ordinary-edge-serve.ps1'), 'utf8');
+  assert.doesNotMatch(serve, /-RequestBase64/, 'module logging records parameter values');
+  assert.match(serve, /\$global:EduDockRequestLine = \$line\.Trim\(\)/);
+  assert.match(serve, /finally \{\s*\$global:EduDockRequestLine = \$null/);
+  const helper = readFileSync(bridge, 'utf8');
+  assert.doesNotMatch(helper, /TypeText/, 'the whole-string typer gave the focus no chance to be checked');
+  const loop = helper.slice(helper.indexOf('foreach ($character in $secret.ToCharArray())'));
+  assert.ok(loop.indexOf('GetForegroundWindow() -ne $targetHandle') < loop.indexOf('TypeChar($character)'));
+  assert.ok(loop.indexOf('FocusedElement') < loop.indexOf('TypeChar($character)'));
+  assert.match(helper, /\$secret = \$script:CertificateSecret\s+\$script:CertificateSecret = \$null/);
+  // The only cmdlets that see a request are fed the JSON part, which no longer holds the secret.
+  assert.match(helper, /\$RequestBase64 = \$requestLine\.Substring\(0, \$separator\)/);
+});
+
 test('a real run compiles its interop type, so inspect never reports a crash', () => {
   // Fixture runs skip Get-RealWindows and therefore never compile the embedded C#. A C# 7
   // construct once broke every live Edge feature while this suite stayed green, so this
@@ -610,6 +638,10 @@ test('the two session notices seen live are reported by kind, and nothing else i
   assert.equal(edufine.windows[0].sessionNotice, 'edufine-usetime');
   const portal = runBridge(JSON.stringify({ command: 'inspect' }), { windows: [windowFixture({ noticeControls: portalNotice })] }).output;
   assert.equal(portal.windows[0].sessionNotice, 'portal-session');
+  const staleLogout = { name: 'Logout', automationId: 'btn-logout', role: 'Hyperlink', parentRole: 'Document', parentAutomationId: 'RootWebArea', visible: true, enabled: true, patterns: ['Invoke'], processId: 411 };
+  const blocked = runBridge(JSON.stringify({ command: 'inspect' }), { windows: [windowFixture({ controls: [staleLogout], noticeControls: portalNotice })] }).output;
+  assert.equal(blocked.windows[0].authenticated, false, 'stale logout control behind an expiry notice is not a session');
+  assert.equal(blocked.windows[0].landing, null);
   for (const controls of [
     [],
     [usetimeNotice[0]],

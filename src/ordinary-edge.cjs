@@ -3,7 +3,7 @@
 const path = require('node:path');
 const { spawn: spawnProcess } = require('node:child_process');
 const { AuthenticationCancelledError } = require('./auth.cjs');
-const { NativeHelperWorker } = require('./native-worker.cjs');
+const { NativeHelperWorker, encodeRequestLine } = require('./native-worker.cjs');
 const { canFillBody } = require('./draft-handoff.cjs');
 
 const STATUSES = new Set(['ok', 'unavailable', 'stale', 'ambiguous', 'cancelled', 'error']);
@@ -189,12 +189,14 @@ class NativeOrdinaryEdgeBridge {
           finish(needsUser('invalid-response', 'Edge 화면 상태를 읽지 못했습니다. 다시 시도해 주세요.'));
         }
       });
-      try { child.stdin.end(body); } catch (error) { stop(error); }
+      // A request with the password goes in the same one-line form the served helper reads.
+      try { child.stdin.end(typeof body === 'string' ? body : encodeRequestLine(body)); } catch (error) { stop(error); }
     });
   }
 
   run(request, operation) {
-    const body = JSON.stringify(validateRequest(request));
+    const { password, ...rest } = validateRequest(request);
+    const body = password ? { json: JSON.stringify(rest), secret: password } : JSON.stringify(rest);
     if (operation?.cancelled) return Promise.reject(new AuthenticationCancelledError());
     if (!this.workerRunner) return this.runOnce(body, operation);
     return this.workerRunner.run(body, operation)
@@ -370,10 +372,35 @@ class OrdinaryEdgeAdapter {
     return tabbed.find(window => window.foreground === true) || tabbed[0];
   }
 
-  async openOfficialPortal(url, operation) {
+  async openOfficialPortal(url, operation, { recoverSession = false } = {}) {
     this.assertActive(operation);
     const state = this.state(operation);
     state.desiredSystem = systemForAction(operation.action);
+    if (recoverSession) {
+      // Keep the same operation's password-attempt and notice limits. Recovery must not
+      // replay a saved password, discard a draft, or close/refresh any existing work tab.
+      state.resumed = false;
+      state.window = null;
+      state.loginAttempted = false;
+      state.lostSince = null;
+      state.recoveringSession = true;
+      const current = state.target ? await this.inspect(operation, state.target) : null;
+      const portal = current?.origin === SYSTEM_ORIGINS.portal ? current
+        : current?.availableSystems.includes('portal') ? current : await this.findSystemTabWindow(operation, 'portal');
+      if (portal) {
+        state.target = targetOf(portal);
+        if (portal.origin !== SYSTEM_ORIGINS.portal) {
+          await this.invoke(state, 'activate-system-tab', operation, { system: 'portal', requireLanding: false });
+        }
+        return { opened: false, recoveringSession: true };
+      }
+      state.target = null;
+      state.desiredSystem = 'portal';
+      state.requestedAt = this.now();
+      await this.openExternal(url);
+      this.assertActive(operation);
+      return { opened: true, recoveringSession: true };
+    }
     const existing = await this.inspect(operation, null, state.desiredSystem, { restoreMinimised: true });
     if (existing) {
       state.target = targetOf(existing);
@@ -405,8 +432,19 @@ class OrdinaryEdgeAdapter {
   // A session notice ('사용시간이 종료되었습니다', '세션이 만료되었습니다') is acknowledged once per
   // kind; pressing it is never taken as login — the caller re-observes the page afterwards.
   async dismissNotice(window, operation, state) {
-    if (!window?.sessionNotice || state.dismissedNotices.has(window.sessionNotice)) return false;
-    state.dismissedNotices.add(window.sessionNotice);
+    if (!window?.sessionNotice) return false;
+    const key = `${window.pid}:${window.hwnd}:${window.processStartedAt}:${window.sessionNotice}`;
+    if (state.dismissedNotices.has(key)) {
+      // A still-visible notice is never proof of authentication or successful arrival.
+      if (this.now() - state.noticeDismissedAt >= this.landingTimeoutMs) {
+        throw needsUser('session-notice-stuck', '세션 종료 안내가 닫히지 않았습니다. 해당 안내창을 확인한 뒤 다시 눌러 주세요.');
+      }
+      await this.pause(400);
+      return true;
+    }
+    state.dismissedNotices.add(key);
+    state.noticeDismissedAt = this.now();
+    state.sessionExpired = true;
     await this.invoke(state, 'dismiss-session-notice', operation);
     await this.pause(400);
     return true;
@@ -416,6 +454,8 @@ class OrdinaryEdgeAdapter {
     this.assertActive(operation);
     const response = validateResponse(await this.runNative({ command: 'invoke', target: state.target, action, ...details }, operation));
     this.assertActive(operation);
+    // The helper stopped typing the password because another window or field took the focus.
+    if (response.interrupted === true) throw needsUser('password-interrupted', '다른 창이 앞으로 와서 비밀번호 입력을 멈췄어요. 인증서 창에서 직접 입력해 주세요.');
     if (response.status !== 'ok' || response.invoked !== true) throw needsUser('not-invoked', '열린 Edge 화면에서 요청한 동작을 실행하지 못했습니다. 화면을 확인한 뒤 다시 시도해 주세요.');
     return response;
   }
@@ -441,6 +481,9 @@ class OrdinaryEdgeAdapter {
     state.lostSince = null;
     state.target = targetOf(window);
     if (await this.dismissNotice(window, operation, state)) return false;
+    if (state.sessionExpired && insideAnyBusinessSystem(window) && window.landing === null) {
+      throw needsUser('authentication-required', '세션이 종료되어 업무포털 로그인을 다시 확인해야 합니다.');
+    }
     // A page anywhere inside 나이스 or K-에듀파인 (a sub-screen, not their front page) carries no
     // logout control and no landing, yet being there is itself proof of login. Without this
     // the widget spun on a teacher already working in K-에듀파인 until the five minute timeout.
@@ -476,8 +519,11 @@ class OrdinaryEdgeAdapter {
           await this.invoke(state, 'submit-certificate-password', operation, { password: stored });
         } catch (error) {
           if (error instanceof AuthenticationCancelledError) throw error;
-          this.onPasswordRejected();
-          throw needsUser('stored-password-failed', '저장해 둔 비밀번호로 로그인하지 못했어요. 인증서 창에서 직접 입력해 주세요. 저장된 비밀번호는 지웠습니다.');
+          // An interrupted entry says nothing about the password itself, so it is kept.
+          if (error?.reason === 'password-interrupted') throw error;
+          // A missing field, helper timeout or stale page does not prove the password wrong.
+          // Preserve both the saved secret and the user's automatic-login preference.
+          throw needsUser('stored-password-failed', '저장된 비밀번호를 자동으로 입력하지 못했어요. 인증서 창을 확인해 주세요. 저장된 비밀번호와 자동 로그인 설정은 유지됩니다.');
         }
         return false;
       }
@@ -528,6 +574,10 @@ class OrdinaryEdgeAdapter {
     state.resumed = true;
     const deepActionUnsupported = !['portal', 'neis', 'edufine'].includes(action);
     let window = state.target ? await this.inspect(operation, state.target, system) : null;
+    if (window?.sessionNotice) {
+      await this.dismissNotice(window, operation, state);
+      throw needsUser('authentication-required', '세션이 종료되어 업무포털 로그인을 다시 확인해야 합니다.');
+    }
     requireAuthenticationIfReturned(window);
     // A page deep inside a business system reports authenticated=false, because that flag comes
     // from the portal's own logout control. Being inside the system is itself proof that login
@@ -538,14 +588,14 @@ class OrdinaryEdgeAdapter {
     if (!window || (!window.authenticated && window.landing === null && !insideSystem(window, system) && !insideAnyBusinessSystem(window))) {
       throw needsUser('portal-unavailable', `로그인된 업무포털 화면을 찾지 못해 ${SYSTEM_LABELS[system]}(으)로 이동하지 못했습니다. 업무포털에 로그인한 뒤 다시 시도해 주세요.`);
     }
-    const needsLaunch = !insideSystem(window, system) && !window.availableSystems.includes(system);
+    const needsLaunch = !insideSystem(window, system) && (!window.availableSystems.includes(system) || state.recoveringSession === true);
     const launched = needsLaunch && window.landing === 'portal' && window.authenticated === true && window.actions.includes(system);
     if (launched) window = await this.launchSystem(system, operation, state, window);
     if (!window || (!insideSystem(window, system) && !window.availableSystems.includes(system))) throw needsUser(launched ? 'launch-not-arrived' : 'launch-unavailable', launched
       ? `${SYSTEM_LABELS[system]} 화면이 열리기를 기다렸지만 도착을 확인하지 못했습니다. 새로 열린 Edge 탭의 오류 메시지를 확인한 뒤 다시 시도해 주세요.`
       : `업무포털 화면에서 ${SYSTEM_LABELS[system]} 바로가기를 찾지 못했습니다. 업무포털 메인 화면인지 확인한 뒤 다시 시도해 주세요.`);
     state.window = window;
-    if (window.availableSystems.includes(system)) await this.invoke(state, 'activate-system-tab', operation, { system });
+    if (window.availableSystems.includes(system)) await this.invoke(state, 'activate-system-tab', operation, { system, requireLanding: false });
     const deadline = this.now() + this.landingTimeoutMs;
     let landingWindow = null;
     while (this.now() < deadline) {
@@ -554,6 +604,9 @@ class OrdinaryEdgeAdapter {
       // portal session, so the arrival check simply continues afterwards.
       if (await this.dismissNotice(landed, operation, state)) continue;
       requireAuthenticationIfReturned(landed);
+      if (state.sessionExpired && insideAnyBusinessSystem(landed) && landed.landing === null) {
+        throw needsUser('authentication-required', '세션이 종료되어 업무포털 로그인을 다시 확인해야 합니다.');
+      }
       // Being anywhere inside the system counts as arrival for the actions that go on to
       // navigate it themselves (draft) and for the plain system buttons: a teacher sitting in
       // 공용서식 who presses K-에듀파인 is already where they asked to be, and demanding the
@@ -601,6 +654,9 @@ class OrdinaryEdgeAdapter {
       const opened = await this.inspect(operation, state.target, system);
       if (await this.dismissNotice(opened, operation, state)) continue;
       requireAuthenticationIfReturned(opened);
+      if (state.sessionExpired && insideAnyBusinessSystem(opened) && opened.landing === null) {
+        throw needsUser('authentication-required', '세션이 종료되어 업무포털 로그인을 다시 확인해야 합니다.');
+      }
       // After clicking the launch link we must see real arrival, not just the right host.
       if (opened && (readyForSystem(opened, system) || opened.availableSystems.includes(system))) return opened;
     }
@@ -633,6 +689,10 @@ class OrdinaryEdgeAdapter {
         window = await this.inspect(operation, state.target, 'neis');
       }
       requireAuthenticationIfReturned(window);
+      if (window?.sessionNotice) {
+        await this.dismissNotice(window, operation, state);
+        throw needsUser('authentication-required', '세션이 종료되어 업무포털 로그인을 다시 확인해야 합니다.');
+      }
       if (!window || window.landing !== 'neis') throw needsUser('task-landing-lost', `${TASK_LABELS[task]} 메뉴로 이동하는 중 나이스 화면을 놓쳤습니다. 나이스 화면을 확인한 뒤 다시 시도해 주세요.`);
     }
     throw needsUser('task-timeout', `${TASK_LABELS[task]} 화면으로 이동하기를 기다렸지만 도착을 확인하지 못했습니다. 다시 시도해 주세요.`);
@@ -649,14 +709,14 @@ function systemForAction(action) {
 // Arrival: the system's own front page, which is what we report as success. An error page on
 // the right host must never count.
 function readyForSystem(window, system) {
-  if (!system || window.landing !== system) return false;
+  if (!system || window.sessionNotice || window.landing !== system) return false;
   return system === 'portal' ? window.authenticated === true : true;
 }
 
 // Presence: already somewhere inside the system. Used to decide whether a launch is needed and
 // for actions that navigate onwards themselves, so a screen already in use is not re-opened.
 function insideSystem(window, system) {
-  if (!system || !window) return false;
+  if (!system || !window || window.sessionNotice) return false;
   return readyForSystem(window, system) || (system !== 'portal' && window.origin === SYSTEM_ORIGINS[system]);
 }
 
@@ -664,14 +724,14 @@ function insideSystem(window, system) {
 // pages carry no logout control of their own, so authenticated/landing stay false there. It
 // says nothing about which system was asked for — only that no fresh login is needed.
 function insideAnyBusinessSystem(window) {
-  return Boolean(window) && (window.origin === SYSTEM_ORIGINS.neis || window.origin === SYSTEM_ORIGINS.edufine);
+  return Boolean(window) && !window.sessionNotice && (window.origin === SYSTEM_ORIGINS.neis || window.origin === SYSTEM_ORIGINS.edufine);
 }
 
 // Showing: the system's own tab is the one on screen, not merely its host in the address bar.
 // A browser error page keeps the host but loses the system's name from the tab, so this is
 // what lets a sub-screen (공용서식, a NEIS task) count as arrival without letting a failure in.
 function showingSystem(window, system) {
-  if (!system || !window || system === 'portal') return false;
+  if (!system || !window || window.sessionNotice || system === 'portal') return false;
   return window.origin === SYSTEM_ORIGINS[system] && window.selectedSystem === system;
 }
 

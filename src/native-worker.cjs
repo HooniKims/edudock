@@ -12,6 +12,16 @@ const { spawn: spawnProcess } = require('node:child_process');
 
 const MAX_BUFFER_BYTES = 256 * 1024;
 
+// A request is a JSON string, or { json, secret } when it carries the certificate password. The
+// secret travels outside the JSON, after a '.' (never part of base64), so on the PowerShell side
+// it never passes through a cmdlet or a script parameter, which PowerShell module logging (a
+// policy schools can switch on) would copy into the Windows event log.
+function encodeRequestLine(body) {
+  if (typeof body === 'string') return Buffer.from(body, 'utf8').toString('base64');
+  const json = Buffer.from(body.json, 'utf8').toString('base64');
+  return body.secret ? `${json}.${Buffer.from(body.secret, 'utf8').toString('base64')}` : json;
+}
+
 class NativeHelperWorker {
   constructor({ helperPath, servePath, spawn = spawnProcess, timeoutMs = 10000, errors }) {
     this.helperPath = helperPath;
@@ -101,7 +111,7 @@ class NativeHelperWorker {
       }
       worker.waiter = { owner: finish, resolve: line => finish(null, line), reject: error => finish(error) };
       try {
-        worker.child.stdin.write(`${Buffer.from(body, 'utf8').toString('base64')}\n`);
+        worker.child.stdin.write(`${encodeRequestLine(body)}\n`);
       } catch (error) {
         finish(Object.assign(error, { workerFault: true }));
       }
@@ -117,4 +127,4 @@ class NativeHelperWorker {
   }
 }
 
-module.exports = { NativeHelperWorker, MAX_BUFFER_BYTES };
+module.exports = { NativeHelperWorker, MAX_BUFFER_BYTES, encodeRequestLine };

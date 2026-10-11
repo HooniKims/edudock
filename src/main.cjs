@@ -430,7 +430,7 @@ app.whenReady().then(() => {
   }
   persist();
   loginItem = createLoginItem({
-    mode: loginItemMode({ platform: process.platform, isPackaged: app.isPackaged, windowsStore: Boolean(process.windowsStore) }),
+    mode: loginItemMode({ platform: process.platform, isPackaged: app.isPackaged && !process.env.EDUDOCK_QA_PROFILE, windowsStore: Boolean(process.windowsStore) }),
     command: launchCommand({ execPath: process.execPath, env: process.env }),
   });
   loginItem.sync(settings.launchAtLogin === true).then(publish, () => {});
@@ -517,7 +517,7 @@ app.whenReady().then(() => {
     },
   });
   automation = new PortalAutomation({
-    openPortal: (url, operation) => ordinaryEdge.openOfficialPortal(url, operation),
+    openPortal: (url, operation, options) => ordinaryEdge.openOfficialPortal(url, operation, options),
     observeAuthenticated: operation => ordinaryEdge.observeAuthenticated(operation),
     resumeAction: (action, operation, options) => ordinaryEdge.resumeAction(action, operation, options),
     autoLogin: settings.autoLogin,

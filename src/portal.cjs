@@ -176,11 +176,24 @@ class PortalAutomation {
         this.statusFor(operation, 'awaiting-user-auth', this.autoLogin
           ? '로그인 상태를 확인하고 있어요. 필요하면 저장된 비밀번호로 로그인합니다.'
           : '로그인 상태를 확인하고 있어요. 인증서 창이 뜨면 비밀번호를 직접 입력해 주세요.');
-        await this.wait(operation, waitForUserAuthentication({ isAuthenticated: () => this.observeAuthenticated(operation), isCancelled: () => operation.cancelled || this.operation !== operation, pause: this.pause, timeoutMs: this.authTimeoutMs }));
-        this.statusFor(operation, 'authenticated', '업무포털 로그인을 확인했습니다.');
-        if (id !== 'portal' && !this.resumeAction) throw new Error('일반 Edge에서 원래 업무를 이어가는 연결이 아직 구성되지 않았습니다.');
-        if (id !== 'portal') this.statusFor(operation, 'navigating', `${menus[id]} 화면으로 이동하고 있습니다.`);
-        const resumed = this.resumeAction ? await this.wait(operation, this.resumeAction(id, operation, { draft: options.draft ?? null })) : null;
+        let resumed;
+        for (let recovery = 0; ; recovery += 1) {
+          try {
+            await this.wait(operation, waitForUserAuthentication({ isAuthenticated: () => this.observeAuthenticated(operation), isCancelled: () => operation.cancelled || this.operation !== operation, pause: this.pause, timeoutMs: this.authTimeoutMs }));
+            this.statusFor(operation, 'authenticated', '업무포털 로그인을 확인했습니다.');
+            if (id !== 'portal' && !this.resumeAction) throw new Error('일반 Edge에서 원래 업무를 이어가는 연결이 아직 구성되지 않았습니다.');
+            if (id !== 'portal') this.statusFor(operation, 'navigating', `${menus[id]} 화면으로 이동하고 있습니다.`);
+            resumed = this.resumeAction ? await this.wait(operation, this.resumeAction(id, operation, { draft: options.draft ?? null })) : null;
+            break;
+          } catch (error) {
+            // Only verified session expiry/login return may restart navigation, once.
+            // Ordinary errors and draft-editor failures must never replay the user's work.
+            if (!this.autoLogin || recovery !== 0 || error?.code !== 'needs-user' || error.reason !== 'authentication-required') throw error;
+            this.assertActive(operation);
+            this.statusFor(operation, 'awaiting-user-auth', '세션이 종료되어 로그인을 복구하고 있어요. 완료되면 선택한 화면으로 이동합니다.');
+            await this.wait(operation, this.openPortal('microsoft-edge:https://sen.eduptl.kr', operation, { recoverSession: true }), this.now() + this.connectionTimeoutMs);
+          }
+        }
         if (resumed?.verified === true) {
           const behind = resumed.raised === false ? ' 기안창이 뒤에 열렸다면 작업 표시줄에서 눌러 주세요.' : '';
           const message = (resumed.drafted === true ? '기안문에 초안을 넣었습니다. 내용을 확인하고 상신해 주세요.' : `${menus[id]} 화면을 확인했습니다.`) + behind;

@@ -192,7 +192,7 @@ test('no stored password: the password box is brought forward once and nothing i
   assert.equal(invokes.some(request => 'password' in request), false);
 });
 
-test('a rejected stored password is cleared and explained instead of being tried again', async () => {
+test('failed password entry is explained without clearing the saved password or retrying', async () => {
   let cleared = 0;
   const adapter = new OrdinaryEdgeAdapter({
     runNative: async request => (request.command === 'invoke' ? reply([chosen()], { invoked: false }) : reply([chosen()])),
@@ -201,7 +201,25 @@ test('a rejected stored password is cleared and explained instead of being tried
   const op = operation();
   adapter.state(op).target = target;
   await assert.rejects(adapter.observeAuthenticated(op), error => error.reason === 'stored-password-failed');
-  assert.equal(cleared, 1);
+  assert.equal(cleared, 0);
+  assert.equal(await adapter.observeAuthenticated(op), false);
+});
+
+test('an entry stopped because the focus moved keeps the stored password and asks for it once by hand', async () => {
+  let cleared = 0;
+  const submits = [];
+  const adapter = new OrdinaryEdgeAdapter({
+    runNative: async request => {
+      if (request.action === 'submit-certificate-password') submits.push(request);
+      return request.command === 'invoke' ? reply([chosen()], { status: 'unavailable', invoked: false, interrupted: true }) : reply([chosen()]);
+    },
+    openExternal: async () => {}, pause: async () => {}, getStoredPassword: () => 'pa55word!', onPasswordRejected: () => { cleared += 1; },
+  });
+  const op = operation();
+  adapter.state(op).target = target;
+  await assert.rejects(adapter.observeAuthenticated(op), error => error.reason === 'password-interrupted' && /직접 입력/.test(error.message));
+  assert.equal(cleared, 0, 'an interrupted entry says nothing about the password itself');
+  assert.equal(submits.length, 1, 'tried once, not replayed');
 });
 
 test('an empty or oversized password is refused before it reaches the helper', async () => {

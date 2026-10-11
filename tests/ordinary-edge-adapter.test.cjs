@@ -318,7 +318,7 @@ test('existing NEIS landing is reused without opening a duplicate URL and is rev
   assert.deepEqual(opened, []);
   assert.equal(await adapter.observeAuthenticated(op), true);
   assert.deepEqual(await adapter.resumeAction('neis', op), { verified: true, system: 'neis', deepActionUnsupported: false });
-  assert.deepEqual(requests[2], { command: 'invoke', target, action: 'activate-system-tab', system: 'neis' });
+  assert.deepEqual(requests[2], { command: 'invoke', target, action: 'activate-system-tab', system: 'neis', requireLanding: false });
 });
 
 test('K-EdYouFine activation reuses the existing Edge tab set and waits for exact landing', async () => {
@@ -685,6 +685,35 @@ test('the served bridge reuses one helper process across calls and frames one re
     assert.ok(write.endsWith('\n'), 'each request is one line');
     assert.equal(Buffer.from(write.trim(), 'base64').toString('utf8'), '{"command":"inspect"}');
   }
+});
+
+test('the certificate password travels outside the JSON, after a dot, in both the served and the one-shot run', async () => {
+  const request = { command: 'invoke', target: { pid: 7, hwnd: '70', processStartedAt: '2026-09-20T10:00:00.0000000Z' }, action: 'submit-certificate-password', password: 'pa55wörd!' };
+  const { spawn, spawns } = servedSpawn();
+  const bridge = new NativeOrdinaryEdgeBridge({ helperPath: 'h.ps1', servePath: 's.ps1', spawn, timeoutMs: 1000 });
+  await bridge.run(request, operation());
+  const [json, secret, extra] = spawns[0].writes[0].trim().split('.');
+  assert.equal(extra, undefined);
+  const decoded = Buffer.from(json, 'base64').toString('utf8');
+  assert.equal(decoded.includes('pa55'), false, 'the JSON part never holds the password');
+  assert.deepEqual(JSON.parse(decoded), { command: 'invoke', target: request.target, action: 'submit-certificate-password' });
+  assert.equal(Buffer.from(secret, 'base64').toString('utf8'), 'pa55wörd!');
+
+  let ended = null;
+  const oneShot = (file, args) => {
+    const child = new EventEmitter();
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    child.stdin = { end(value) { ended = value; setImmediate(() => { child.stdout.emit('data', Buffer.from(JSON.stringify(reply([])))); child.emit('close', 0); }); }, on() {} };
+    child.kill = () => true;
+    return child;
+  };
+  await new NativeOrdinaryEdgeBridge({ helperPath: 'h.ps1', spawn: oneShot, timeoutMs: 1000 }).run(request, operation());
+  assert.equal(ended, spawns[0].writes[0].trim(), 'the one-shot helper gets the same line');
+  // Requests without a password keep the old framing.
+  const plain = servedSpawn();
+  await new NativeOrdinaryEdgeBridge({ helperPath: 'h.ps1', servePath: 's.ps1', spawn: plain.spawn, timeoutMs: 1000 }).run({ command: 'inspect' }, operation());
+  assert.equal(plain.spawns[0].writes[0].includes('.'), false);
 });
 
 test('a worker that dies without answering falls back to a one-shot helper run', async () => {

@@ -1002,6 +1002,11 @@ $writeStep
 
 # Read stdin as UTF-8 explicitly. [Console]::In decodes with the ambient console code page,
 # which mangles the Korean form caption whenever the helper is spawned with a piped stdin.
+# The served worker hands the request over in a variable, not a parameter (ordinary-edge-serve.ps1).
+if ([string]::IsNullOrEmpty($RequestBase64) -and -not [string]::IsNullOrEmpty($global:EduDockRequestLine)) {
+    $RequestBase64 = $global:EduDockRequestLine
+    $global:EduDockRequestLine = $null
+}
 if ([string]::IsNullOrEmpty($RequestBase64)) {
     $requestReader = New-Object IO.StreamReader([Console]::OpenStandardInput(), (New-Object Text.UTF8Encoding($false)))
     $requestText = $requestReader.ReadToEnd()

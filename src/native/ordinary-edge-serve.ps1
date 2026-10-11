@@ -18,6 +18,10 @@ param(
 # Protocol: one base64 request per input line, exactly one compact JSON line per response,
 # in order. The caller must keep a single request in flight so responses cannot be
 # mismatched; on any protocol doubt the caller kills this process and starts a new one.
+#
+# The line reaches the helper through $global:EduDockRequestLine, never as a parameter: with
+# PowerShell module logging switched on by policy, parameter values are copied into the Windows
+# event log, and a line may carry the certificate password.
 
 $ErrorActionPreference = 'Continue'
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
@@ -40,8 +44,10 @@ $reader = New-Object IO.StreamReader([Console]::OpenStandardInput(), (New-Object
 while ($null -ne ($line = $reader.ReadLine())) {
     if ([string]::IsNullOrWhiteSpace($line)) { continue }
     $response = $null
+    $global:EduDockRequestLine = $line.Trim()
+    $line = $null
     try {
-        $captured = & $Helper -RequestBase64 $line.Trim() -TimeoutMs $TimeoutMs 2>$null
+        $captured = & $Helper -TimeoutMs $TimeoutMs 2>$null
         foreach ($item in @($captured)) {
             if ($null -eq $item) { continue }
             $text = ([string]$item).Trim()
@@ -49,6 +55,8 @@ while ($null -ne ($line = $reader.ReadLine())) {
         }
     } catch {
         $response = $null
+    } finally {
+        $global:EduDockRequestLine = $null
     }
     if ([string]::IsNullOrWhiteSpace($response)) { $response = $errorLine }
     # A stray newline would desynchronise the stream, so collapse the response to one line.

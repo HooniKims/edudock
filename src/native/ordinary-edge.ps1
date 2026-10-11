@@ -24,12 +24,36 @@ function New-BridgeResult {
     return [pscustomobject]$result
 }
 
-if (-not $Worker -and [string]::IsNullOrEmpty($RequestBase64)) {
+# The request line is base64 JSON, optionally followed by '.' and the base64 certificate password.
+# The password stays out of the JSON and out of every cmdlet and parameter (ConvertFrom-Json,
+# -RequestBase64): PowerShell module logging, which a school policy may switch on, copies those
+# values into the Windows event log. The served worker hands the line over in a variable.
+$requestLine = $null
+if ([string]::IsNullOrEmpty($RequestBase64) -and -not [string]::IsNullOrEmpty($global:EduDockRequestLine)) {
+    $requestLine = $global:EduDockRequestLine
+    $global:EduDockRequestLine = $null
+} elseif (-not [string]::IsNullOrEmpty($RequestBase64)) {
+    $requestLine = $RequestBase64
+} elseif (-not $Worker) {
     # Read stdin as UTF-8 explicitly; [Console]::In would decode with the ambient console code page.
     $requestReader = New-Object IO.StreamReader([Console]::OpenStandardInput(), (New-Object Text.UTF8Encoding($false)))
-    $requestText = $requestReader.ReadToEnd()
-    $RequestBase64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($requestText))
+    $requestText = $requestReader.ReadToEnd().Trim()
+    # A one-shot run gets either the same line or (fixtures, older callers) plain JSON.
+    $requestLine = if ($requestText.StartsWith('{')) { [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($requestText)) } else { $requestText }
+    $requestText = $null
 }
+$secretBase64 = $null
+if (-not [string]::IsNullOrEmpty($requestLine)) {
+    $separator = $requestLine.IndexOf('.')
+    if ($separator -ge 0) {
+        $RequestBase64 = $requestLine.Substring(0, $separator)
+        $secretBase64 = $requestLine.Substring($separator + 1)
+    } else {
+        $RequestBase64 = $requestLine
+    }
+}
+$requestLine = $null
+$script:CertificateSecret = $null
 
 function CodePoints {
     param([int[]]$Values)
@@ -294,8 +318,9 @@ function Test-LandingWindow {
 function ConvertTo-PublicWindow {
     param([object]$Window, [object]$OriginEvidence)
     $trusted = $OriginEvidence.state -eq 'trusted'
-    $authenticated = Test-AuthenticatedWindow -Window $Window -Trusted $trusted -OriginEvidence $OriginEvidence
-    $landingVerified = Test-LandingWindow -Window $Window -OriginEvidence $OriginEvidence -Authenticated $authenticated
+    $notice = if ($trusted) { Get-SessionNotice -Window $Window } else { $null }
+    $authenticated = ($null -eq $notice) -and (Test-AuthenticatedWindow -Window $Window -Trusted $trusted -OriginEvidence $OriginEvidence)
+    $landingVerified = ($null -eq $notice) -and (Test-LandingWindow -Window $Window -OriginEvidence $OriginEvidence -Authenticated $authenticated)
     $neisTaskState = Get-SafeNeisTaskState -Window $Window -OriginEvidence $OriginEvidence -LandingVerified $landingVerified
     $certificateState = Get-CertificateState -Window $Window
     $systemTabState = Get-SystemTabState -Window $Window
@@ -336,7 +361,7 @@ function ConvertTo-PublicWindow {
         # error page keeps the host while the tab loses the system's name, so this separates
         # 'a K-에듀파인 screen the user is working on' from 'a failure on klef.sen.go.kr'.
         selectedSystem = $(if ($trusted) { $showing = @($systemTabState.tabs | Where-Object { $_.selected -eq $true }); if ($showing.Count -eq 1) { $showing[0].system } else { $null } } else { $null })
-        sessionNotice = $(if ($trusted) { $notice = Get-SessionNotice -Window $Window; if ($null -ne $notice) { $notice.kind } else { $null } } else { $null })
+        sessionNotice = $(if ($null -ne $notice) { $notice.kind } else { $null })
         authenticated = $authenticated
         # Which window the user is actually looking at, used to break ties when the portal
         # opens more than one window.
@@ -504,16 +529,15 @@ public static class OrdinaryEdgeNativeV1 {
         return GetForegroundWindow() == hWnd;
     }
 
-    // Unicode scan codes, so every character of the password arrives regardless of layout.
+    // One character as a Unicode scan code, so it arrives regardless of keyboard layout. The
+    // caller checks the focus before every character (see submit-certificate-password).
     // Keyboard only: the helper never moves or presses the real mouse.
-    public static void TypeText(string text) {
-        foreach (char c in text) {
-            INPUT[] pair = new INPUT[2];
-            pair[0].type = 1; pair[0].ki.scan = c; pair[0].ki.flags = 0x0004;
-            pair[1].type = 1; pair[1].ki.scan = c; pair[1].ki.flags = 0x0006;
-            SendInput(2, pair, Marshal.SizeOf(typeof(INPUT)));
-            System.Threading.Thread.Sleep(25);
-        }
+    public static void TypeChar(char c) {
+        INPUT[] pair = new INPUT[2];
+        pair[0].type = 1; pair[0].ki.scan = c; pair[0].ki.flags = 0x0004;
+        pair[1].type = 1; pair[1].ki.scan = c; pair[1].ki.flags = 0x0006;
+        SendInput(2, pair, Marshal.SizeOf(typeof(INPUT)));
+        System.Threading.Thread.Sleep(25);
     }
 }
 '@
@@ -745,7 +769,8 @@ function Test-ValidRequest {
     }
     if ($Request.command -eq 'invoke' -and $Request.action -eq 'activate-system-tab' -and $Request.system -notin @('portal', 'neis', 'edufine')) { return $false }
     if ($Request.command -eq 'invoke' -and $Request.action -eq 'submit-certificate-password') {
-        if ($Request.password -isnot [string] -or $Request.password.Length -eq 0 -or $Request.password.Length -gt 256) { return $false }
+        # Read from the script variable, never handed to this function as a parameter.
+        if ($script:CertificateSecret -isnot [string] -or $script:CertificateSecret.Length -eq 0 -or $script:CertificateSecret.Length -gt 256) { return $false }
     }
     if ($null -ne $Request.target) {
         if ($Request.target.pid -isnot [int] -and $Request.target.pid -isnot [long]) { return $false }
@@ -757,6 +782,13 @@ function Test-ValidRequest {
 try {
     $requestText = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($RequestBase64))
     $request = $requestText | ConvertFrom-Json -ErrorAction Stop
+    if ($null -ne $secretBase64) {
+        try { $script:CertificateSecret = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($secretBase64)) } catch { $script:CertificateSecret = $null }
+        $secretBase64 = $null
+    } elseif ($request.password -is [string]) {
+        # Plain JSON with the password inside: fixture runs only. The app never sends this form.
+        $script:CertificateSecret = $request.password
+    }
     if (-not (Test-ValidRequest -Request $request)) {
         Write-BridgeJson (New-BridgeResult -Status 'error' -Invoked $(if ($request.command -eq 'invoke') { $false } else { $null }))
         exit 0
@@ -1008,7 +1040,8 @@ try {
             Write-BridgeJson (New-BridgeResult -Status 'unavailable' -Windows @($evaluation.public) -Invoked $false)
             exit 0
         }
-        $secret = [string]$request.password
+        $secret = $script:CertificateSecret
+        $script:CertificateSecret = $null
         if ([string]::IsNullOrEmpty($secret) -or $secret.Length -gt 256) {
             Write-BridgeJson (New-BridgeResult -Status 'error' -Invoked $false)
             exit 0
@@ -1062,12 +1095,41 @@ try {
             try { $field.SetFocus() } catch {}
             Start-Sleep -Milliseconds 80
             try { if ([int]$valuePattern.Current.Value.Length -gt 0) { $valuePattern.SetValue('') } } catch {}
-            [OrdinaryEdgeNativeV1]::TypeText($secret)
+            # Keys go to whatever has the focus, so before every character the certificate window
+            # must still be in front and the focus still in its password box. If the teacher
+            # switches away mid-way, typing stops at once instead of landing in another program.
+            $interrupted = $false
+            foreach ($character in $secret.ToCharArray()) {
+                if ([OrdinaryEdgeNativeV1]::GetForegroundWindow() -ne $targetHandle) { $interrupted = $true; break }
+                $focused = $null
+                try { $focused = [System.Windows.Automation.AutomationElement]::FocusedElement } catch {}
+                $inField = $false
+                if ($null -ne $focused) {
+                    try {
+                        $inField = [System.Windows.Automation.Automation]::Compare($focused, $field) -or
+                            ($focused.Current.ProcessId -eq [int]$evaluation.raw.pid -and $focused.Current.IsPassword -and $focused.Current.ClassName -ceq 'kc-pw-box')
+                    } catch { $inField = $false }
+                }
+                if (-not $inField) { $interrupted = $true; break }
+                [OrdinaryEdgeNativeV1]::TypeChar($character)
+            }
+            $character = $null
+            if ($interrupted) {
+                try { $valuePattern.SetValue('') } catch {}
+                $secretLength = $secret.Length
+                $secret = $null
+                $stopped = New-BridgeResult -Status 'unavailable' -Windows @($evaluation.public) -Invoked $false
+                $stopped | Add-Member -NotePropertyName 'interrupted' -NotePropertyValue $true
+                Write-BridgeJson $stopped
+                exit 0
+            }
             Start-Sleep -Milliseconds 150
             try { $typed = [int]$valuePattern.Current.Value.Length } catch { $typed = -1 }
         }
         # Verify the field really took the whole secret before committing; never echo it.
-        if ($typed -ne $secret.Length) {
+        $secretLength = $secret.Length
+        $secret = $null
+        if ($typed -ne $secretLength) {
             Write-BridgeJson (New-BridgeResult -Status 'unavailable' -Windows @($evaluation.public) -Invoked $false)
             exit 0
         }
