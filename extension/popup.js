@@ -30,7 +30,10 @@ function describe(entry) {
 async function render() {
   const state = await send({ type: 'state' });
   $('enabled').checked = state.enabled === true;
-  $('neis').checked = state.neisEnabled === true && state.neisAllowed === true;
+  $('neis').hidden = state.neisAllowed === true;
+  $('neis-status').textContent = state.neisAllowed
+    ? '나이스도 기본으로 포함됩니다. 위의 세션 유지 설정을 함께 따릅니다.'
+    : '나이스도 기본으로 포함됩니다. 처음 한 번 Edge의 사이트 접근을 허용해 주세요.';
   $('log').replaceChildren(...(state.log || []).map(entry => {
     const { cls, text } = describe(entry);
     const li = document.createElement('li');
@@ -47,13 +50,11 @@ async function perform(action) {
   finally { await render().catch(() => { $('message').textContent = '확장 프로그램 상태를 읽지 못했습니다.'; }); }
 }
 $('enabled').addEventListener('change', event => { void perform(() => send({ type: 'set-enabled', enabled: event.target.checked })); });
-$('neis').addEventListener('change', event => {
-  const enabled = event.target.checked;
+$('neis').addEventListener('click', () => {
   // Request directly in the user's gesture; browser permission dialogs are user-controlled.
-  const permission = enabled ? chrome.permissions.request({ origins: ['https://sen.neis.go.kr/*'] }) : Promise.resolve(true);
+  const permission = chrome.permissions.request({ origins: ['https://sen.neis.go.kr/*'] });
   void perform(async () => {
     if (!await permission) { $('message').textContent = '나이스 접근이 허용되지 않았습니다. 기존 사이트 설정은 유지됩니다.'; return; }
-    return send({ type: 'set-neis-enabled', enabled });
   });
 });
 $('run').addEventListener('click', async () => {

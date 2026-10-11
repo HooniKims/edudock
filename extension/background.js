@@ -16,7 +16,7 @@ const PERIOD_MINUTES = 4;
 const MAX_LOG = 40;
 
 async function settings() {
-  return chrome.storage.local.get({ enabled: false, neisEnabled: false, log: [] });
+  return chrome.storage.local.get({ enabled: false, log: [] });
 }
 
 async function appendLog(entries) {
@@ -65,7 +65,7 @@ function pressExtendInPage() {
 
 async function sessionTabs() {
   const hosts = [...HOSTS];
-  if ((await settings()).neisEnabled && await chrome.permissions.contains({ origins: [NEIS_HOST] })) hosts.push(NEIS_HOST);
+  if (await chrome.permissions.contains({ origins: [NEIS_HOST] })) hosts.push(NEIS_HOST);
   const tabs = await chrome.tabs.query({ url: hosts });
   return tabs.filter(tab => !tab.discarded);
 }
@@ -133,12 +133,6 @@ chrome.runtime.onMessage.addListener((message, _sender, reply) => {
       return { ok: true };
     }
     if (message?.type === 'run-now') return { ok: true, entries: await keepAlive('manual') };
-    if (message?.type === 'set-neis-enabled') {
-      const allowed = await chrome.permissions.contains({ origins: [NEIS_HOST] });
-      if (message.enabled === true && !allowed) return { ok: false };
-      await chrome.storage.local.set({ neisEnabled: message.enabled === true });
-      return { ok: true };
-    }
     if (message?.type === 'state') return { ok: true, ...(await settings()), neisAllowed: await chrome.permissions.contains({ origins: [NEIS_HOST] }) };
     return { ok: false };
   })().then(reply, error => reply({ ok: false, error: String(error && error.message || error) }));

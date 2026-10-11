@@ -92,8 +92,8 @@ test('timeout aborts request and cannot later reset timer', async () => {
   assert.equal(p.counts().resets, 0);
 });
 
-function worker({ allowed = false, neisEnabled = false } = {}) {
-  const saved = { enabled: true, neisEnabled, log: [] };
+function worker({ allowed = false } = {}) {
+  const saved = { enabled: true, log: [] };
   const calls = [], listeners = {};
   const context = vm.createContext({
     URL, setTimeout, clearTimeout, console, importScripts: () => {}, extendNeisInPage() {},
@@ -120,17 +120,17 @@ test('upgrading does not request mandatory NEIS access; existing enabled prefere
   assert.deepEqual(manifest.host_permissions, ['https://sen.eduptl.kr/*', 'https://klef.sen.go.kr/*']);
   assert.deepEqual(manifest.optional_host_permissions, ['https://sen.neis.go.kr/*']);
   const w = worker();
-  assert.equal((await w.message({ type: 'set-neis-enabled', enabled: true })).ok, false);
   await w.message({ type: 'run-now' });
   assert.equal(w.saved.enabled, true);
   assert.equal(w.calls[0].query.includes('https://sen.neis.go.kr/*'), false);
 });
-test('permission revocation or feature opt-out prevents NEIS injection', async () => {
-  for (const options of [{ allowed: false, neisEnabled: true }, { allowed: true, neisEnabled: false }]) {
-    const w = worker(options);
-    await w.message({ type: 'run-now' });
-    assert.equal(w.calls.some(c => c.world), false);
-  }
+test('NEIS is included by default with permission; revocation prevents injection', async () => {
+  const allowed = worker({ allowed: true });
+  await allowed.message({ type: 'run-now' });
+  assert.equal(allowed.calls.filter(c => c.world === 'MAIN').length, 1);
+  const revoked = worker({ allowed: false });
+  await revoked.message({ type: 'run-now' });
+  assert.equal(revoked.calls.some(c => c.world), false);
 });
 test('concurrent manual/alarm runs share a single request and log; MAIN used for NEIS', async () => {
   const w = worker({ allowed: true, neisEnabled: true });
