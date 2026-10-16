@@ -1,13 +1,17 @@
 'use strict';
 
 const $ = id => document.getElementById(id);
-const HOST_NAMES = { 'sen.eduptl.kr': '업무포털', 'klef.sen.go.kr': 'K-에듀파인', 'sen.neis.go.kr': '나이스' };
 const send = message => chrome.runtime.sendMessage(message);
+
+function hostName(host) {
+  const known = describeHost(host);
+  return known ? `${known.regionName} ${known.systemName}` : host;
+}
 
 function describe(entry) {
   const time = new Date(entry.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
   if (entry.note) return { cls: 'miss', text: `${time} · ${entry.note}` };
-  const name = HOST_NAMES[entry.host] || entry.host;
+  const name = hostName(entry.host);
   if (entry.status) {
     const messages = {
       'server-accepted': '기본 세션 서버 응답 확인 · 메뉴 동작·2차 인증은 별도',
@@ -27,13 +31,25 @@ function describe(entry) {
   return { cls: 'ok', text: `${time} · ${name}: "${entry.clicked}" 누름 ${entry.before || '?'} → ${entry.after || '?'}` };
 }
 
+const select = $('region');
+select.replaceChildren(new Option('교육청을 골라 주세요', ''), ...REGIONS.map(({ code, name }) => new Option(name, code)));
+select.options[0].disabled = true;
+
 async function render() {
   const state = await send({ type: 'state' });
   $('enabled').checked = state.enabled === true;
-  $('neis').hidden = state.neisAllowed === true;
-  $('neis-status').textContent = state.neisAllowed
-    ? '나이스도 기본으로 포함됩니다. 위의 세션 유지 설정을 함께 따릅니다.'
-    : '나이스도 기본으로 포함됩니다. 처음 한 번 Edge의 사이트 접근을 허용해 주세요.';
+  const region = isRegionCode(state.region) ? state.region : '';
+  if (document.activeElement !== select) select.value = region;
+  const chosen = select.value;
+  // Ready only when the office shown in the list is the saved one and all three sites are allowed.
+  const ready = state.ready === true && chosen === region;
+  $('setup').hidden = ready;
+  $('allow').textContent = chosen ? `${regionName(chosen)} 사이트 사용 허용` : '교육청을 먼저 골라 주세요';
+  $('allow').disabled = !chosen;
+  $('region-status').textContent = ready
+    ? `${regionName(region)} 교육청의 업무포털·K-에듀파인·나이스에서 동작합니다.`
+    : '교육청을 고르고 [사용 허용]을 눌러 주세요. Edge 권한 창에서 [허용]을 직접 눌러야 합니다.';
+  $('region-status').className = ready ? 'hint' : 'hint attention';
   $('log').replaceChildren(...(state.log || []).map(entry => {
     const { cls, text } = describe(entry);
     const li = document.createElement('li');
@@ -50,11 +66,16 @@ async function perform(action) {
   finally { await render().catch(() => { $('message').textContent = '확장 프로그램 상태를 읽지 못했습니다.'; }); }
 }
 $('enabled').addEventListener('change', event => { void perform(() => send({ type: 'set-enabled', enabled: event.target.checked })); });
-$('neis').addEventListener('click', () => {
+select.addEventListener('change', () => { void perform(() => Promise.resolve()); });
+$('allow').addEventListener('click', () => {
+  const region = select.value;
+  if (!isRegionCode(region)) return;
   // Request directly in the user's gesture; browser permission dialogs are user-controlled.
-  const permission = chrome.permissions.request({ origins: ['https://sen.neis.go.kr/*'] });
+  const permission = chrome.permissions.request({ origins: regionPatterns(region) });
   void perform(async () => {
-    if (!await permission) { $('message').textContent = '나이스 접근이 허용되지 않았습니다. 기존 사이트 설정은 유지됩니다.'; return; }
+    const allowed = await permission;
+    await send({ type: 'set-region', region });
+    if (!allowed) $('message').textContent = '사이트 접근이 허용되지 않았습니다. 다시 누르고 [허용]을 직접 눌러 주세요.';
   });
 });
 $('run').addEventListener('click', async () => {

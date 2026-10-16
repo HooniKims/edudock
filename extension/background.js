@@ -2,21 +2,47 @@
 
 // 업무 곁 세션 유지 — keeps 업무포털 and K-에듀파인 signed in while the switch is on.
 //
-// Every few minutes it looks at the tabs already open on those two sites and, inside each page,
+// It works for any of the 17 시도교육청: the teacher picks one on the setup page and allows that
+// office's three sites there; only sites the browser has actually granted are ever touched.
+//
+// Every few minutes it looks at the tabs already open on those sites and, inside each page,
 // presses the site's own session-extend button (업무포털: "세션 시간 초기화", K-에듀파인: "로그아웃
 // 30분 연장"). Nothing is opened, switched or brought forward, and nothing leaves the browser:
 // the switch and a short local log are all it stores.
 // NEIS is opt-in and uses the site's primary-session endpoint, never its clock icon.
-importScripts('neis.js');
+importScripts('regions.js', 'neis.js');
 
-const HOSTS = ['https://sen.eduptl.kr/*', 'https://klef.sen.go.kr/*'];
-const NEIS_HOST = 'https://sen.neis.go.kr/*';
 const ALARM = 'keepalive';
 const PERIOD_MINUTES = 4;
 const MAX_LOG = 40;
 
 async function settings() {
-  return chrome.storage.local.get({ enabled: false, log: [] });
+  return chrome.storage.local.get({ enabled: false, log: [], region: null });
+}
+
+async function granted(patterns) {
+  const results = await Promise.all(patterns.map(pattern => chrome.permissions.contains({ origins: [pattern] }).catch(() => false)));
+  return patterns.filter((_, index) => results[index]);
+}
+
+// Ready = an office is chosen and the browser allows all three of its sites.
+async function regionReady(region) {
+  if (!isRegionCode(region)) return false;
+  const patterns = regionPatterns(region);
+  return (await granted(patterns)).length === patterns.length;
+}
+
+// A "!" on the toolbar icon until the setup is done, so it is noticed without opening anything.
+async function refreshBadge() {
+  if (!chrome.action) return;
+  const ready = await regionReady((await settings()).region);
+  await chrome.action.setBadgeText({ text: ready ? '' : '!' });
+  if (!ready) await chrome.action.setBadgeBackgroundColor({ color: '#d97706' });
+  await chrome.action.setTitle({ title: ready ? '업무 곁 세션 유지' : '업무 곁 세션 유지 · 교육청을 고르고 사용을 허용해 주세요' });
+}
+
+function openSetup() {
+  return chrome.tabs.create({ url: chrome.runtime.getURL('setup.html') });
 }
 
 async function appendLog(entries) {
@@ -64,10 +90,10 @@ function pressExtendInPage() {
 // ------------------------------------------------------------------------------------------
 
 async function sessionTabs() {
-  const hosts = [...HOSTS];
-  if (await chrome.permissions.contains({ origins: [NEIS_HOST] })) hosts.push(NEIS_HOST);
-  const tabs = await chrome.tabs.query({ url: hosts });
-  return tabs.filter(tab => !tab.discarded);
+  const patterns = await granted(ALL_PATTERNS);
+  if (!patterns.length) return [];
+  const tabs = await chrome.tabs.query({ url: patterns });
+  return tabs.filter(tab => !tab.discarded && describeHost(new URL(tab.url).host));
 }
 
 async function inTab(tabId, func, world = 'ISOLATED') {
@@ -97,7 +123,7 @@ async function runKeepAlive(reason) {
     try { if (tab.autoDiscardable !== false) await chrome.tabs.update(tab.id, { autoDiscardable: false }); } catch {}
     if (tab.frozen) { entries.push({ at, reason, host, error: '탭이 절전 모드라 누르지 못함' }); continue; }
     try {
-      if (host === 'sen.neis.go.kr') {
+      if (describeHost(host)?.system === 'neis') {
         const result = await withTimeout(inTab(tab.id, extendNeisInPage, 'MAIN'), 10000, '나이스 연장');
         entries.push({ at, reason, host, status: result?.status || 'request-failed' });
         continue;
@@ -117,8 +143,23 @@ async function runKeepAlive(reason) {
   return entries;
 }
 
-chrome.runtime.onInstalled.addListener(() => { void ensureAlarm(); });
-chrome.runtime.onStartup.addListener(() => { void ensureAlarm(); });
+// A new install opens the setup page by itself. An update from the 서울-only version keeps 서울;
+// it is shown the page only when 나이스 was never allowed, which is the one thing left to do.
+async function onInstalled(details) {
+  await ensureAlarm();
+  const { region } = await settings();
+  if (details?.reason === 'install') await openSetup();
+  else if (details?.reason === 'update' && !isRegionCode(region)) {
+    await chrome.storage.local.set({ region: 'sen' });
+    if (!await regionReady('sen')) await openSetup();
+  }
+  await refreshBadge();
+}
+
+chrome.runtime.onInstalled.addListener(details => { void onInstalled(details); });
+chrome.runtime.onStartup.addListener(() => { void ensureAlarm(); void refreshBadge(); });
+if (chrome.permissions.onAdded) chrome.permissions.onAdded.addListener(() => { void refreshBadge(); });
+if (chrome.permissions.onRemoved) chrome.permissions.onRemoved.addListener(() => { void refreshBadge(); });
 chrome.alarms.onAlarm.addListener(async alarm => {
   if (alarm.name !== ALARM) return;
   if ((await settings()).enabled) await keepAlive('alarm');
@@ -132,8 +173,17 @@ chrome.runtime.onMessage.addListener((message, _sender, reply) => {
       if (message.enabled === true) await keepAlive('switched-on');
       return { ok: true };
     }
+    if (message?.type === 'set-region') {
+      if (!isRegionCode(message.region)) return { ok: false };
+      await chrome.storage.local.set({ region: message.region });
+      await refreshBadge();
+      return { ok: true };
+    }
     if (message?.type === 'run-now') return { ok: true, entries: await keepAlive('manual') };
-    if (message?.type === 'state') return { ok: true, ...(await settings()), neisAllowed: await chrome.permissions.contains({ origins: [NEIS_HOST] }) };
+    if (message?.type === 'state') {
+      const state = await settings();
+      return { ok: true, ...state, ready: await regionReady(state.region) };
+    }
     return { ok: false };
   })().then(reply, error => reply({ ok: false, error: String(error && error.message || error) }));
   return true;

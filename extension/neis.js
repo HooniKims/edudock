@@ -5,7 +5,8 @@
 // A "Y" acknowledges the primary session only, not individual menus or 2nd authentication.
 async function extendNeisInPage() {
   const fail = status => ({ status });
-  if (location.origin !== 'https://sen.neis.go.kr') return fail('wrong-origin');
+  // Every 시도교육청 runs the same 나이스 at <code>.neis.go.kr.
+  if (!/^https:\/\/[a-z]{3}\.neis\.go\.kr$/.test(location.origin)) return fail('wrong-origin');
   const pageProblem = () => {
     const text = document.body?.innerText || '';
     if (/세션\s*DB정보가\s*없|정보보호를\s*위해\s*시스템을\s*종료|세션이?\s*만료/.test(text)) return 'expired';
