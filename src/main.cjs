@@ -18,6 +18,7 @@ const { createUpdater, RELEASE_REPOSITORY } = require('./updater.cjs');
 const { createSavedDrafts } = require('./saved-drafts.cjs');
 const { createDiagnosticLog } = require('./diagnostic-log.cjs');
 const { createLoginItem, loginItemMode, launchCommand, AUTOSTART_ARG } = require('./login-item.cjs');
+const { REGIONS, isRegionCode, regionName, setActiveRegion } = require('./regions.cjs');
 
 let notch;
 let auxiliary;
@@ -115,7 +116,7 @@ function state() {
   }
   const displays = screen.getAllDisplays().length ? describeDisplays(screen.getAllDisplays(), screen.getPrimaryDisplay().id) : [];
   const placementLabel = settings?.placement && displays.length ? describePlacement(displays, settings.placement, screen.getPrimaryDisplay().id) : '';
-  return { settings, placementMaxScale, displays, placementLabel, authenticationPending: Boolean(automation?.operation), passwordStorageAvailable: Boolean(secrets?.available()), update: updater?.state || null, operation: currentStatus, interaction: notch?.interaction || null, loginItem: loginItem?.state || null, version: app.getVersion() };
+  return { settings, regions: REGIONS, placementMaxScale, displays, placementLabel, authenticationPending: Boolean(automation?.operation), passwordStorageAvailable: Boolean(secrets?.available()), update: updater?.state || null, operation: currentStatus, interaction: notch?.interaction || null, loginItem: loginItem?.state || null, version: app.getVersion() };
 }
 
 function registerWindow(window, role) {
@@ -305,6 +306,7 @@ function buildTrayMenu() {
     { label: '초안 열기', click: () => showAuxiliary('draft') },
     { label: '설정 열기', click: () => showAuxiliary('settings') },
     { label: '사용 안내 다시 보기', click: () => { try { startGuide(); } catch {} } },
+    { label: '교육청 바꾸기', click: () => { try { showRegionPrompt(); } catch {} } },
     { type: 'separator' },
     { label: '위젯 위치', submenu: placementItems() },
     updater?.state.phase === 'ready'
@@ -328,11 +330,58 @@ function refreshTrayMenu() {
   tray.setContextMenu(buildTrayMenu());
 }
 
+// Which 시도교육청 the buttons go to. Asked once in a bubble next to the widget (an update from a
+// 서울-only version is asked too, with 서울 already chosen), and again on a button press while it
+// is still unanswered, so no press can open another office's portal.
+function needsRegion() {
+  return settings.regionConfirmed !== true || !isRegionCode(settings.region);
+}
+
+function showRegionPrompt() {
+  if (!notch?.window || notch.window.isDestroyed() || !popover) return false;
+  guide = null;
+  guideStep = null;
+  updateQuestion = null;
+  clearTimeout(launchHintTimer);
+  clearTimeout(popoverHideTimer);
+  notch.show(false);
+  notch.dispatch('expand');
+  const bounds = notch.window.getBounds();
+  popover.show({
+    kind: 'region', label: '어느 교육청에서 쓰시나요?', anchor: bounds, notchBounds: bounds, edge: settings.placement.edge, focus: true,
+    region: { regions: REGIONS, selected: isRegionCode(settings.region) ? settings.region : null },
+  });
+  return true;
+}
+
+function chooseRegion(code) {
+  if (!isRegionCode(code)) throw new Error('교육청을 다시 골라 주세요.');
+  const changed = settings.region !== code;
+  // A login or screen move already under way belongs to the old office's pages.
+  if (changed && automation?.busy) automation.cancel({ silent: true });
+  settings = sanitizedSettings({ ...settings, region: code, regionConfirmed: true });
+  setActiveRegion(code);
+  persist();
+  diagnosticLog?.append('region', { detail: code });
+  publish();
+  return state();
+}
+
+// A short bubble that says what just happened, then goes away by itself.
+function showHint(label, ms = 6000) {
+  if (!notch?.window || notch.window.isDestroyed() || !notch.window.isVisible()) return;
+  const bounds = notch.window.getBounds();
+  popover.show({ kind: 'hint', label, anchor: bounds, notchBounds: bounds, edge: settings.placement.edge });
+  clearTimeout(launchHintTimer);
+  launchHintTimer = setTimeout(() => { if (popover.kind === 'hint') popover.hide(); }, ms);
+  launchHintTimer.unref?.();
+}
+
 // A small arrow bubble next to the widget at launch. It keeps the widget expanded while shown
 // (popover presence) and goes away by itself; any other popover simply replaces it.
 let launchHintTimer = null;
 function showLaunchHint() {
-  if (!notch?.window || notch.window.isDestroyed() || !notch.window.isVisible() || guide || updateQuestion) return;
+  if (!notch?.window || notch.window.isDestroyed() || !notch.window.isVisible() || guide || updateQuestion || popover?.kind === 'region') return;
   const bounds = notch.window.getBounds();
   // A stored password that could not be opened at start-up is said once, in place of the usual hint.
   const label = storedPasswordLost
@@ -359,7 +408,7 @@ function promptForUpdate(update) {
   const step = update?.phase === 'available' ? 'available' : update?.phase === 'ready' ? 'ready' : null;
   if (!step || !update.available || updateAnswered[step] === update.available) return;
   if (updateQuestion?.step === step && updateQuestion.version === update.available && popover?.kind === 'update') return;
-  if (automation?.busy || guide || !notch?.window || notch.window.isDestroyed() || !notch.window.isVisible()) {
+  if (automation?.busy || guide || popover?.kind === 'region' || !notch?.window || notch.window.isDestroyed() || !notch.window.isVisible()) {
     const retry = setTimeout(() => promptForUpdate(updater?.state), 10000);
     retry.unref?.();
     return;
@@ -415,6 +464,7 @@ app.on('second-instance', () => {
 
 app.whenReady().then(() => {
   settings = loadSettings(app.getPath('userData'));
+  setActiveRegion(settings.region);
   diagnosticLog = createDiagnosticLog({ directory: app.getPath('userData') });
   diagnosticLog.append('app-start', { version: app.getVersion(), detail: `${process.windowsStore ? 'store' : app.isPackaged ? 'installed' : 'development'}${process.argv.includes(AUTOSTART_ARG) ? ' login' : ''}` });
   if (settings.autoLogin && settings.passwordSaved !== true) settings = sanitizedSettings({ ...settings, autoLogin: false });
@@ -531,7 +581,9 @@ app.whenReady().then(() => {
   });
 
   const icon = nativeImage.createFromPath(path.join(__dirname, '../assets/app-icon.png')).resize({ width: 16, height: 16 });
-  if (shouldAutoStart(settings)) setTimeout(() => { try { startGuide(); } catch {} }, 1200);
+  // The office comes first: the walkthrough and the launch hint wait until it is answered.
+  if (needsRegion()) setTimeout(() => { try { showRegionPrompt(); } catch {} }, 1200);
+  else if (shouldAutoStart(settings)) setTimeout(() => { try { startGuide(); } catch {} }, 1200);
 
   tray = new Tray(icon);
   tray.setToolTip('업무포털 도우미');
@@ -596,6 +648,7 @@ app.whenReady().then(() => {
     // Judged by what is on screen: a question closed some other way (a button press hides the
     // popover) must not keep blocking every tooltip afterwards.
     if (popover.kind === 'update' && request.kind === 'tooltip') return { ok: false, reason: 'update-question-open' };
+    if (popover.kind === 'region' && request.kind === 'tooltip') return { ok: false, reason: 'region-question-open' };
     updateQuestion = null;
     const anchor = request.anchor;
     if (!anchor || !['x', 'y', 'width', 'height'].every(key => Number.isFinite(anchor[key]))) throw new Error('팝오버 위치가 올바르지 않습니다.');
@@ -648,6 +701,10 @@ app.whenReady().then(() => {
     clearTimeout(popoverHideTimer);
     popover.hide();
     notch.dispatch('focus', false);
+    if (needsRegion()) {
+      showRegionPrompt();
+      return { ok: false, phase: 'needs-region', message: '먼저 쓰시는 교육청을 골라 주세요.' };
+    }
     if (typeof request === 'string') return automation.openMenu(request);
     const id = request?.id;
     const draft = request?.draft;
@@ -659,6 +716,17 @@ app.whenReady().then(() => {
     return automation.openMenu(id, { draft: { title, body: draft.body } });
   });
   handle('guide-start', ['notch', 'auxiliary', 'popover'], () => startGuide());
+  handle('region-prompt', ['notch', 'auxiliary'], () => ({ ok: showRegionPrompt() }));
+  handle('region-choose', ['popover', 'auxiliary'], (code, _event, role) => {
+    const next = chooseRegion(code);
+    if (role === 'popover') {
+      popover.hide();
+      // First run continues into the walkthrough; otherwise a short confirmation next to the widget.
+      if (shouldAutoStart(settings)) setTimeout(() => { try { startGuide(); } catch {} }, 300);
+      else setTimeout(() => showHint(`${regionName(code)} 교육청으로 맞췄어요. 버튼을 누르면 바로 이동합니다.`), 300);
+    }
+    return next;
+  });
   handle('guide-next', ['popover'], () => advanceGuide());
   handle('guide-skip', ['popover'], () => { guide?.skip(); return finishGuide(); });
   handle('guide-save-password', ['popover'], password => {
@@ -752,7 +820,7 @@ app.whenReady().then(() => {
   publish();
   // Nothing opens by itself at launch: logging in happens when a button is pressed. The widget
   // only points at itself so the teacher knows where to press.
-  if (!shouldAutoStart(settings)) setTimeout(showLaunchHint, 1500);
+  if (!needsRegion() && !shouldAutoStart(settings)) setTimeout(showLaunchHint, 1500);
   // The native helpers (PowerShell + compiled UI Automation types) cost about two seconds to
   // start, which used to land on the first button press. A read-only look at the Edge windows
   // and the open 기안창 shortly after launch starts them in the background instead.

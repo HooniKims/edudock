@@ -5,13 +5,15 @@ const { spawn: spawnProcess } = require('node:child_process');
 const { AuthenticationCancelledError } = require('./auth.cjs');
 const { NativeHelperWorker, encodeRequestLine } = require('./native-worker.cjs');
 const { canFillBody } = require('./draft-handoff.cjs');
+const { activeOrigins, activeRegion } = require('./regions.cjs');
 
 const STATUSES = new Set(['ok', 'unavailable', 'stale', 'ambiguous', 'cancelled', 'error']);
 const TASK_ACTIONS = new Set(['select-my-menu', 'expand-duty', 'select-attendance-tab', 'select-trip-tab', 'open-attendance', 'open-trip']);
 const ACTIONS = new Set(['login', 'hard-disk', 'removable-disk', 'select-drive', 'select-certificate-row', 'submit-certificate-password', 'activate-system-tab', 'dismiss-session-notice', 'portal', 'neis', 'edufine', ...TASK_ACTIONS]);
 const SESSION_NOTICES = new Set(['edufine-usetime', 'portal-session']);
 const SYSTEMS = new Set(['portal', 'neis', 'edufine']);
-const SYSTEM_ORIGINS = { portal: 'https://sen.eduptl.kr', neis: 'https://sen.neis.go.kr', edufine: 'https://klef.sen.go.kr' };
+// The chosen 시도교육청's three hosts; read on every check so a changed choice applies at once.
+const systemOrigins = () => activeOrigins();
 const MAX_OUTPUT_BYTES = 256 * 1024;
 const MAX_PASSWORD_LENGTH = 256;
 
@@ -39,7 +41,8 @@ function validateRequest(request) {
   if (!request || !['inspect', 'invoke'].includes(request.command)) throw new TypeError('Invalid native ordinary Edge request.');
   if (request.target !== undefined && !validTarget(request.target)) throw new TypeError('Invalid native ordinary Edge target.');
   if (request.command === 'invoke' && (!validTarget(request.target) || !ACTIONS.has(request.action))) throw new TypeError('Invalid native ordinary Edge invocation.');
-  const result = { command: request.command };
+  // The helper derives the same three hosts from this code; it trusts no other office's pages.
+  const result = { command: request.command, region: activeRegion() };
   // Only a discovery pass that a button press just started asks for this: it brings a
   // minimised browser back on screen (without focus) so the existing window is found instead
   // of a new tab being opened on top of it.
@@ -82,14 +85,14 @@ function validCertificate(value) {
 }
 
 function validWindow(value) {
-  return validTarget(value) && (value.origin === null || Object.values(SYSTEM_ORIGINS).includes(value.origin))
+  return validTarget(value) && (value.origin === null || Object.values(systemOrigins()).includes(value.origin))
     && typeof value.authenticated === 'boolean' && typeof value.loginAvailable === 'boolean'
     && validCertificate(value.certificate) && Array.isArray(value.actions)
     && value.actions.every(action => ACTIONS.has(action))
     && (value.landing === null || SYSTEMS.has(value.landing))
     && Array.isArray(value.availableSystems) && value.availableSystems.every(system => SYSTEMS.has(system))
     && new Set(value.availableSystems).size === value.availableSystems.length
-    && (value.landing === null || value.origin === SYSTEM_ORIGINS[value.landing])
+    && (value.landing === null || value.origin === systemOrigins()[value.landing])
     && (value.foreground === undefined || typeof value.foreground === 'boolean')
     && (value.sessionNotice === undefined || value.sessionNotice === null || SESSION_NOTICES.has(value.sessionNotice))
     && (value.selectedSystem === undefined || value.selectedSystem === null || SYSTEMS.has(value.selectedSystem))
@@ -294,7 +297,7 @@ function translateDraftHandoffError(error) {
 }
 
 function requireAuthenticationIfReturned(window) {
-  if (window?.origin === SYSTEM_ORIGINS.portal && window.loginAvailable === true && window.authenticated === false && window.landing === null) {
+  if (window?.origin === systemOrigins().portal && window.loginAvailable === true && window.authenticated === false && window.landing === null) {
     throw Object.assign(new Error('업무포털 로그인이 필요합니다. 공식 로그인 화면에서 로그인한 뒤 다시 시도해 주세요.'), {
       code: 'needs-user', reason: 'authentication-required',
     });
@@ -344,7 +347,7 @@ class OrdinaryEdgeAdapter {
       // Before login the portal window has no verified landing, so the three filters above all
       // miss it and the login could never be started. The official portal origin is the surface
       // every business action has to authenticate on, so fall back to it last.
-      const portalSurface = candidates.filter(window => window.origin === SYSTEM_ORIGINS.portal);
+      const portalSurface = candidates.filter(window => window.origin === systemOrigins().portal);
       candidates = landed.length ? landed : capable.length ? capable : portal.length ? portal : portalSurface;
     }
     if (candidates.length > 1) {
@@ -385,11 +388,11 @@ class OrdinaryEdgeAdapter {
       state.lostSince = null;
       state.recoveringSession = true;
       const current = state.target ? await this.inspect(operation, state.target) : null;
-      const portal = current?.origin === SYSTEM_ORIGINS.portal ? current
+      const portal = current?.origin === systemOrigins().portal ? current
         : current?.availableSystems.includes('portal') ? current : await this.findSystemTabWindow(operation, 'portal');
       if (portal) {
         state.target = targetOf(portal);
-        if (portal.origin !== SYSTEM_ORIGINS.portal) {
+        if (portal.origin !== systemOrigins().portal) {
           await this.invoke(state, 'activate-system-tab', operation, { system: 'portal', requireLanding: false });
         }
         return { opened: false, recoveringSession: true };
@@ -717,14 +720,14 @@ function readyForSystem(window, system) {
 // for actions that navigate onwards themselves, so a screen already in use is not re-opened.
 function insideSystem(window, system) {
   if (!system || !window || window.sessionNotice) return false;
-  return readyForSystem(window, system) || (system !== 'portal' && window.origin === SYSTEM_ORIGINS[system]);
+  return readyForSystem(window, system) || (system !== 'portal' && window.origin === systemOrigins()[system]);
 }
 
 // Being on a business system's own host is proof that the portal login already happened: those
 // pages carry no logout control of their own, so authenticated/landing stay false there. It
 // says nothing about which system was asked for — only that no fresh login is needed.
 function insideAnyBusinessSystem(window) {
-  return Boolean(window) && !window.sessionNotice && (window.origin === SYSTEM_ORIGINS.neis || window.origin === SYSTEM_ORIGINS.edufine);
+  return Boolean(window) && !window.sessionNotice && (window.origin === systemOrigins().neis || window.origin === systemOrigins().edufine);
 }
 
 // Showing: the system's own tab is the one on screen, not merely its host in the address bar.
@@ -732,7 +735,7 @@ function insideAnyBusinessSystem(window) {
 // what lets a sub-screen (공용서식, a NEIS task) count as arrival without letting a failure in.
 function showingSystem(window, system) {
   if (!system || !window || window.sessionNotice || system === 'portal') return false;
-  return window.origin === SYSTEM_ORIGINS[system] && window.selectedSystem === system;
+  return window.origin === systemOrigins()[system] && window.selectedSystem === system;
 }
 
 module.exports = { NativeOrdinaryEdgeBridge, OrdinaryEdgeAdapter, resolveOrdinaryEdgeHelper, resolveOrdinaryEdgeServeHelper, resolveDraftHandoffHelper, validateResponse, translateDraftHandoffError };

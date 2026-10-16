@@ -81,18 +81,20 @@ function createNotchPopover({ BrowserWindow, screen, preload, onWindow, onPresen
 
   function show(request) {
     const target = ensure();
-    const kind = ['status', 'guide', 'update', 'hint'].includes(request.kind) ? request.kind : 'tooltip';
+    const kind = ['status', 'guide', 'update', 'hint', 'region'].includes(request.kind) ? request.kind : 'tooltip';
     current = kind;
     const size = kind === 'status' ? { width: 280, height: 176 }
       : kind === 'guide' ? (request.guide?.kind === 'password-offer' ? { width: 330, height: 372 } : { width: 330, height: 216 })
         : kind === 'update' ? { width: 330, height: 196 }
+        // 17 offices in a 4-column grid under one line of explanation.
+        : kind === 'region' ? { width: 352, height: 344 }
         // The launch hint is one line; a longer notice (e.g. the stored password could not be
         // opened) wraps onto three.
         : kind === 'hint' ? { width: 340, height: String(request.label || '').length > 34 ? 104 : 60 }
         : { width: 220, height: 52 };
     const workArea = screen.getDisplayMatching(request.notchBounds).workArea;
     const bounds = placePopover(request.notchBounds, request.anchor, size, workArea, request.edge);
-    const data = { kind, label: String(request.label || '').slice(0, 80), status: request.status || null, edge: request.edge, guide: request.guide || null, update: request.update || null };
+    const data = { kind, label: String(request.label || '').slice(0, 80), status: request.status || null, edge: request.edge, guide: request.guide || null, update: request.update || null, region: request.region || null };
     pending = { data, bounds };
     target.setBounds(bounds, false);
     if (typeof target.setShape === 'function') target.setShape(popupShape(size, request.edge));

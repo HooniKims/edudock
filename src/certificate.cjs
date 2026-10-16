@@ -1,16 +1,17 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { activeOrigins } = require('./regions.cjs');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function allowPortalHelper(context) {
   for (const page of context.pages()) {
     if (page.url() !== 'edge://permission-request-dialog/') continue;
     const text=await page.locator('body').innerText();
     const origins=[...text.matchAll(/https:\/\/[^\s<>"']+/g)].map(match=>{try{return new URL(match[0]).origin;}catch{return null;}});
-    if(origins.includes('https://sen.eduptl.kr') && text.includes('이 장치에서 다른 앱 및 서비스에 액세스')) await page.locator('#allow-button').click({timeout:3000});
+    if(origins.includes(activeOrigins().portal) && text.includes('이 장치에서 다른 앱 및 서비스에 액세스')) await page.locator('#allow-button').click({timeout:3000});
   }
 }
 function assertPortalOrigin(url) {
-  if(new URL(url).origin!=='https://sen.eduptl.kr')throw new Error('인증서 비밀번호는 서울교육 업무포털에서만 입력합니다.');
+  if(new URL(url).origin!==activeOrigins().portal)throw new Error('인증서 비밀번호는 선택한 교육청의 업무포털에서만 입력합니다.');
 }
 async function openCertificateDialog(page, context, status, isCancelled = () => false, deadline = Date.now() + 45000) {
   assertPortalOrigin(page.url());
@@ -35,6 +36,6 @@ function diagnostics() {
   const roots=[process.env['PROGRAMFILES(X86)'],process.env.PROGRAMFILES].filter(Boolean);
   const edgePaths=roots.map(root=>path.join(root,'Microsoft','Edge','Application','msedge.exe'));
   const helperPaths=roots.map(root=>path.join(root,'Ksign','KCase','KCaseAgent.exe'));
-  return { edgeInstalled:edgePaths.some(p=>fs.existsSync(p)), helperInstalled:helperPaths.some(p=>fs.existsSync(p)), portal:'https://sen.eduptl.kr' };
+  return { edgeInstalled:edgePaths.some(p=>fs.existsSync(p)), helperInstalled:helperPaths.some(p=>fs.existsSync(p)), portal:activeOrigins().portal };
 }
 module.exports={assertPortalOrigin,openCertificateDialog,diagnostics,delay,allowPortalHelper};

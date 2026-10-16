@@ -1,10 +1,14 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { isRegionCode } = require('./regions.cjs');
 const EDGES = ['top', 'right', 'bottom', 'left'];
 const BUTTONS = ['neis', 'edufine', 'attendance', 'trip', 'draft', 'compose'];
 const defaultOffsets = () => ({ top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 });
 const defaults = () => ({
   schemaVersion: 4,
+  // Which 시도교육청 the buttons go to. A new install has none until the teacher picks one.
+  region: null,
+  regionConfirmed: false,
   autoLogin: false,
   launchAtLogin: true,
   guideCompleted: false,
@@ -64,6 +68,8 @@ function cleanPatch(patch) {
   if (typeof patch.autoLogin === 'boolean') result.autoLogin = patch.autoLogin;
   if (typeof patch.launchAtLogin === 'boolean') result.launchAtLogin = patch.launchAtLogin;
   if (typeof patch.guideCompleted === 'boolean') result.guideCompleted = patch.guideCompleted;
+  if (isRegionCode(patch.region)) result.region = patch.region;
+  if (typeof patch.regionConfirmed === 'boolean') result.regionConfirmed = patch.regionConfirmed;
   // Only a marker that a secret exists; the secret itself lives encrypted in its own file.
   if (typeof patch.passwordSaved === 'boolean') result.passwordSaved = patch.passwordSaved;
   if (typeof patch.certificateDriveHint === 'string' && /^[A-Z]:$/.test(patch.certificateDriveHint)) result.certificateDriveHint = patch.certificateDriveHint;
@@ -81,6 +87,9 @@ function sanitizedSettings(value = {}) {
   const patch = cleanPatch(value);
   if (value.schemaVersion !== 4) delete patch.autoLogin;
   if (!Object.hasOwn(value, 'displayMode') && Object.keys(value).length) patch.displayMode = 'expanded';
+  // Every copy before region support was a 서울 copy; it keeps 서울, and is asked once to confirm.
+  if (!Object.hasOwn(value, 'region') && Object.keys(value).length) patch.region = 'sen';
+  if (!isRegionCode(patch.region)) patch.regionConfirmed = false;
   const legacyEdge = EDGES.includes(value.dock) ? value.dock : null;
   const placementPatch = patch.placement || {};
   const settings = {

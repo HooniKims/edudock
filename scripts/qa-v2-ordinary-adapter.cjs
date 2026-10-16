@@ -15,6 +15,8 @@ const relative = file => path.relative(root, file).replaceAll('\\', '/');
 
 (async () => {
   fs.mkdirSync(profile, { recursive: true });
+  // A profile that has already answered the 교육청 question; an unanswered one opens it instead.
+  fs.writeFileSync(path.join(profile, 'settings.json'), JSON.stringify({ schemaVersion: 4, displayMode: 'auto', region: 'sen', regionConfirmed: true }));
   const app = await electron.launch({
     args: [path.join(root, 'scripts', 'qa-v2-ordinary-adapter-bootstrap.cjs')],
     cwd: root,

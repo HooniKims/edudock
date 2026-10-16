@@ -1,6 +1,7 @@
 'use strict';
 
 const { openCertificateDialog, diagnostics, delay, allowPortalHelper } = require('./certificate.cjs');
+const { activeOrigins, regionHosts, activeRegion } = require('./regions.cjs');
 const { waitForUserAuthentication, AuthenticationCancelledError, AuthenticationTimeoutError, ConnectionTimeoutError } = require('./auth.cjs');
 const menus = { portal: '업무포털', neis: '나이스', attendance: '개인근무상황', trip: '출장', edufine: 'K-에듀파인', draft: '일반기안문' };
 const CANCELLED = Symbol('cancelled');
@@ -8,7 +9,8 @@ const CANCELLED = Symbol('cancelled');
 function trusted(url) {
   try {
     const parsed = new URL(url);
-    return parsed.protocol === 'https:' && (parsed.hostname === 'sen.eduptl.kr' || parsed.hostname.endsWith('.sen.go.kr') || parsed.hostname.endsWith('.neis.go.kr') || parsed.hostname.endsWith('.edufine.go.kr'));
+    const hosts = regionHosts(activeRegion());
+    return parsed.protocol === 'https:' && (parsed.hostname === hosts.portal || parsed.hostname === hosts.edufine || parsed.hostname.endsWith(`.${activeRegion()}.go.kr`) || parsed.hostname.endsWith('.neis.go.kr') || parsed.hostname.endsWith('.edufine.go.kr'));
   } catch { return false; }
 }
 
@@ -98,7 +100,7 @@ class PortalAutomation {
     if (this.context) return this.context;
     if (!this.launchContext) throw new Error('브라우저 자동화 연결이 구성되지 않았습니다.');
     const candidatePromise = Promise.resolve(this.launchContext()).then(async candidate => {
-      await candidate.grantPermissions(['local-network-access'], { origin: 'https://sen.eduptl.kr' });
+      await candidate.grantPermissions(['local-network-access'], { origin: activeOrigins().portal });
       if (operation.cancelled || this.operation !== operation || this.now() >= operation.connectionDeadline) {
         await candidate.close().catch(() => {});
         if (operation.cancelled || this.operation !== operation) throw new AuthenticationCancelledError();
@@ -111,7 +113,7 @@ class PortalAutomation {
   async readyPortal(page, context, operation) {
     while (this.now() < operation.connectionDeadline) {
       await this.wait(operation, allowPortalHelper(context), operation.connectionDeadline);
-      const atPortal = new URL(page.url()).origin === 'https://sen.eduptl.kr';
+      const atPortal = new URL(page.url()).origin === activeOrigins().portal;
       const ready = await this.wait(operation, Promise.all([page.locator('#btnLgn:visible').count(), this.authenticated(page)]), operation.connectionDeadline);
       if (atPortal && (ready[0] || ready[1])) return;
       await this.wait(operation, this.pause(500), operation.connectionDeadline);
@@ -166,7 +168,7 @@ class PortalAutomation {
     try {
       this.statusFor(operation, 'opening', `${menus[id]}을(를) Edge에서 여는 중입니다.`);
       if (this.openPortal) {
-        await this.wait(operation, this.openPortal('microsoft-edge:https://sen.eduptl.kr', operation), operation.connectionDeadline);
+        await this.wait(operation, this.openPortal(`microsoft-edge:${activeOrigins().portal}`, operation), operation.connectionDeadline);
         if (!this.observeAuthenticated) {
           const message = '일반 Edge에서 공식 로그인을 마친 뒤 다시 시도를 눌러 주세요.';
           this.retryAction = id; this.statusFor(operation, 'needs-user', message, false);
@@ -191,7 +193,7 @@ class PortalAutomation {
             if (!this.autoLogin || recovery !== 0 || error?.code !== 'needs-user' || error.reason !== 'authentication-required') throw error;
             this.assertActive(operation);
             this.statusFor(operation, 'awaiting-user-auth', '세션이 종료되어 로그인을 복구하고 있어요. 완료되면 선택한 화면으로 이동합니다.');
-            await this.wait(operation, this.openPortal('microsoft-edge:https://sen.eduptl.kr', operation, { recoverSession: true }), this.now() + this.connectionTimeoutMs);
+            await this.wait(operation, this.openPortal(`microsoft-edge:${activeOrigins().portal}`, operation, { recoverSession: true }), this.now() + this.connectionTimeoutMs);
           }
         }
         if (resumed?.verified === true) {
@@ -205,10 +207,10 @@ class PortalAutomation {
         return { ok: true, phase: 'opened', message };
       }
       const context = await this.browser(operation);
-      let portal = context.pages().find(candidate => candidate.url().startsWith('https://sen.eduptl.kr/'));
+      let portal = context.pages().find(candidate => candidate.url().startsWith(`${activeOrigins().portal}/`));
       if (!portal) {
         portal = await this.wait(operation, context.newPage(), operation.connectionDeadline);
-        await this.wait(operation, portal.goto('https://sen.eduptl.kr', { waitUntil: 'domcontentloaded', timeout: Math.max(1, operation.connectionDeadline - this.now()) }), operation.connectionDeadline);
+        await this.wait(operation, portal.goto(activeOrigins().portal, { waitUntil: 'domcontentloaded', timeout: Math.max(1, operation.connectionDeadline - this.now()) }), operation.connectionDeadline);
       }
       await this.readyPortal(portal, context, operation);
       await this.wait(operation, portal.bringToFront(), operation.connectionDeadline);
@@ -223,7 +225,7 @@ class PortalAutomation {
         await this.wait(operation, this.pause(300));
         const added = context.pages().find(candidate => !before.has(candidate) && trusted(candidate.url()));
         if (added) { destination = added; break; }
-        if (!portal.url().includes('sen.eduptl.kr')) break;
+        if (!portal.url().startsWith(`${activeOrigins().portal}/`)) break;
       }
       await this.wait(operation, destination.waitForLoadState('domcontentloaded', { timeout: 20000 }));
       await this.wait(operation, destination.bringToFront());

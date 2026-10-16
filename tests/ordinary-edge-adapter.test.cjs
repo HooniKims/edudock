@@ -79,7 +79,7 @@ test('native bridge uses hidden shell-free PowerShell with one compact JSON requ
   assert.deepEqual(calls[0].args, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'C:\\app\\ordinary-edge.ps1']);
   assert.equal(calls[0].options.shell, false);
   assert.equal(calls[0].options.windowsHide, true);
-  assert.equal(calls[0].value, '{"command":"inspect"}');
+  assert.equal(calls[0].value, '{"command":"inspect","region":"sen"}');
 });
 
 test('native bridge rejects malformed and misleading success output', async () => {
@@ -683,7 +683,7 @@ test('the served bridge reuses one helper process across calls and frames one re
   assert.equal(spawns[0].writes.length, 4);
   for (const write of spawns[0].writes) {
     assert.ok(write.endsWith('\n'), 'each request is one line');
-    assert.equal(Buffer.from(write.trim(), 'base64').toString('utf8'), '{"command":"inspect"}');
+    assert.equal(Buffer.from(write.trim(), 'base64').toString('utf8'), '{"command":"inspect","region":"sen"}');
   }
 });
 
@@ -696,7 +696,7 @@ test('the certificate password travels outside the JSON, after a dot, in both th
   assert.equal(extra, undefined);
   const decoded = Buffer.from(json, 'base64').toString('utf8');
   assert.equal(decoded.includes('pa55'), false, 'the JSON part never holds the password');
-  assert.deepEqual(JSON.parse(decoded), { command: 'invoke', target: request.target, action: 'submit-certificate-password' });
+  assert.deepEqual(JSON.parse(decoded), { command: 'invoke', region: 'sen', target: request.target, action: 'submit-certificate-password' });
   assert.equal(Buffer.from(secret, 'base64').toString('utf8'), 'pa55wörd!');
 
   let ended = null;

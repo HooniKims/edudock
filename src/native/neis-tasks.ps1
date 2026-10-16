@@ -32,7 +32,7 @@ function Test-NeisClassTokens {
 
 function Test-NeisTargetIdentity {
     param([object]$Root, [object]$Target)
-    if ($null -eq $Root -or $null -eq $Target -or $Target.origin -cne 'https://sen.neis.go.kr') { return $false }
+    if ($null -eq $Root -or $null -eq $Target -or $Target.origin -cnotmatch '^https://[a-z]{3}\.neis\.go\.kr$') { return $false }
     if ($Root.PSObject.Properties.Name -contains 'controls') {
         return [int]$Root.processId -eq [int]$Target.pid -and [string]$Root.hwnd -ceq [string]$Target.hwnd -and
             [string]$Root.processStartedAt -ceq [string]$Target.processStartedAt -and $Root.origin -ceq $Target.origin -and $Root.locked -ne $true

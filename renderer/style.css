@@ -174,3 +174,7 @@ h1,.greeting h1,.brand{font-family:Paperlogy,'Malgun Gothic',sans-serif}
 .saved-empty{font-size:12.5px;color:var(--muted);margin:0}
 #draft-view #draft-form [name="purpose"]{font-family:'GulimChe','굴림체','D2Coding',monospace;font-size:13.5px;line-height:1.7;white-space:pre}
 #draft-view #draft-form [name="purpose"]::placeholder{font-family:inherit;font-size:13px;line-height:1.7;color:#8a94a6;white-space:pre}
+
+.region-select{min-width:112px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--paper);color:var(--ink);font-size:13px;font-weight:600}
+.settings-card .setting-row[data-attention="true"] strong{color:var(--blue)}
+.settings-card .setting-row[data-attention="true"] .region-select{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-pale)}

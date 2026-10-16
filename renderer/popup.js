@@ -32,6 +32,8 @@ function render(data) {
   element('status').hidden = data.kind !== 'status';
   element('guide').hidden = data.kind !== 'guide';
   element('update').hidden = data.kind !== 'update';
+  element('region').hidden = data.kind !== 'region';
+  if (data.kind === 'region') renderRegions(data.region || {});
   if (data.kind === 'update') {
     const question = data.update || {};
     element('update-body').textContent = question.body || '';
@@ -67,6 +69,50 @@ function render(data) {
   }
 }
 
+let pickedRegion = null;
+function pickRegion(code) {
+  pickedRegion = code;
+  for (const button of all('#region-grid button')) button.setAttribute('aria-checked', String(button.dataset.code === code));
+  const chosen = all('#region-grid button').find(button => button.dataset.code === code);
+  element('region-picked').textContent = chosen ? `${chosen.textContent} 선택` : '';
+  element('region-ok').disabled = !chosen;
+}
+function renderRegions(region) {
+  const grid = element('region-grid');
+  grid.replaceChildren(...(region.regions || []).map(({ code, name }) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.setAttribute('role', 'radio');
+    button.dataset.code = code;
+    button.textContent = name;
+    button.addEventListener('click', () => pickRegion(code));
+    button.addEventListener('dblclick', () => { pickRegion(code); void confirmRegion(); });
+    return button;
+  }));
+  pickRegion(region.selected || null);
+  (all('#region-grid button[aria-checked="true"]')[0] || grid.firstElementChild)?.focus({ preventScroll: true });
+}
+async function confirmRegion() {
+  if (!pickedRegion) return;
+  try { await api.regionChoose(pickedRegion); }
+  catch { element('region-picked').textContent = '저장하지 못했어요. 다시 눌러 주세요.'; }
+}
+element('region-ok').addEventListener('click', () => { void confirmRegion(); });
+element('region-later').addEventListener('click', () => { void api.hidePopover(); });
+// Arrow keys move through the grid like any radio group; Enter confirms.
+element('region-grid').addEventListener('keydown', event => {
+  const buttons = all('#region-grid button');
+  const index = buttons.indexOf(document.activeElement);
+  if (index < 0) return;
+  const step = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 4, ArrowUp: -4 }[event.key];
+  if (step) {
+    event.preventDefault();
+    const next = buttons[Math.max(0, Math.min(buttons.length - 1, index + step))];
+    next.focus({ preventScroll: true });
+    pickRegion(next.dataset.code);
+  } else if (event.key === 'Enter' && pickedRegion) { event.preventDefault(); void confirmRegion(); }
+});
+
 api.onPopoverData(render);
 api.onStatus(status => { if (currentData.kind === 'status') render({ status }); });
 api.onState(state => { if (currentData.kind === 'status' && state.operation) render({ status: state.operation }); });
@@ -74,7 +120,7 @@ if (api.onGuideStep) api.onGuideStep(step => { if (step) render({ kind: 'guide',
 
 document.body.addEventListener('pointerenter', () => api.notchInteraction({ type: 'popup', value: true }));
 document.body.addEventListener('pointerleave', () => {
-  if (document.hasFocus() || currentData.kind === 'guide' || currentData.kind === 'update') return;
+  if (document.hasFocus() || ['guide', 'update', 'region'].includes(currentData.kind)) return;
   api.notchInteraction({ type: 'popup', value: false });
   api.hidePopover({ delay: 250 });
 });
@@ -131,5 +177,6 @@ document.addEventListener('keydown', event => {
   if (event.key !== 'Escape') return;
   if (currentData.kind === 'guide') { api.guideSkip().catch(() => {}).then(() => api.hidePopover()); return; }
   if (currentData.kind === 'update') { answerUpdate(false); return; }
+  if (currentData.kind === 'region') { api.hidePopover(); return; }
   api.notchInteraction({ type: 'escape' }).then(() => api.hidePopover());
 });

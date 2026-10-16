@@ -43,6 +43,7 @@ function renderState(next) {
   document.body.dataset.dock = edge;
   element('always-on-top').checked = Boolean(next.settings.alwaysOnTop);
   element('auto-login').checked = Boolean(next.settings.autoLogin);
+  renderRegion(next);
   const opacityPercent = Math.round((Number.isFinite(next.settings.opacity) ? next.settings.opacity : 1) * 100);
   element('opacity').value = String(opacityPercent);
   element('opacity-value').textContent = `${opacityPercent}%`;
@@ -137,6 +138,28 @@ async function updateSettings(patch) {
   try { renderState(await invoke('settings', patch)); }
   catch (error) { renderState(state); report(error); }
 }
+function renderRegion(next) {
+  const select = element('region-select');
+  const regions = Array.isArray(next.regions) ? next.regions : [];
+  if (select.options.length !== regions.length + 1) {
+    const placeholder = new Option('골라 주세요', '');
+    placeholder.disabled = true;
+    select.replaceChildren(placeholder, ...regions.map(({ code, name }) => new Option(name, code)));
+  }
+  const confirmed = next.settings.regionConfirmed === true && regions.some(({ code }) => code === next.settings.region);
+  select.value = confirmed ? next.settings.region : '';
+  element('region-row').dataset.attention = String(!confirmed);
+  element('region-help').textContent = confirmed
+    ? '버튼이 이 교육청의 업무포털·나이스·K-에듀파인으로 갑니다.'
+    : '먼저 쓰시는 교육청을 골라 주세요. 고르기 전에는 업무 버튼이 동작하지 않아요.';
+}
+element('region-select').addEventListener('change', async (event) => {
+  const code = event.target.value;
+  try {
+    renderState(await api.regionChoose(code));
+    status(`${event.target.selectedOptions[0]?.textContent || ''} 교육청으로 맞췄어요.`, 'success');
+  } catch (error) { renderState(state); report(error); }
+});
 element('always-on-top').addEventListener('change', (event) => updateSettings({ alwaysOnTop: event.target.checked }));
 element('launch-at-login').addEventListener('change', async (event) => {
   const enabled = event.target.checked;

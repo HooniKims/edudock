@@ -10,7 +10,7 @@ const BUTTON_STEPS = Object.freeze({
   trip: { title: '출장', body: '출장 화면을 바로 띄웁니다. 내용은 확인하고 상신하세요.' },
   draft: { title: '일반기안문', body: '공용서식에서 일반기안문을 꺼내 줍니다. 떠 있는 기안창이 있으면 그 창을 앞으로 올립니다.' },
   compose: { title: '초안 만들기', body: '기안 문구를 미리 다듬어 보는 창입니다. 복사하거나 파일로 저장하세요.' },
-  settings: { title: '설정', body: '위치와 크기, 투명도, 버튼 순서를 여기서 바꿉니다. 이 안내도 다시 볼 수 있어요.' },
+  settings: { title: '설정', body: '교육청, 위치와 크기, 투명도, 버튼 순서를 여기서 바꿉니다. 이 안내도 다시 볼 수 있어요.' },
 });
 
 const PASSWORD_STEP = Object.freeze({

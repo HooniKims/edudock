@@ -122,7 +122,7 @@ test('the saved password is typed in only while auto-login is on, and nothing lo
   assert.match(main, /getStoredPassword: \(\) => \(settings\.passwordSaved === true && settings\.autoLogin === true \?/);
   // Launching the app, switching auto-login on or saving the password opens nothing by itself.
   assert.doesNotMatch(main, /startAutoLogin|startBackgroundLogin/);
-  assert.match(main, /if \(!shouldAutoStart\(settings\)\) setTimeout\(showLaunchHint, 1500\);/);
+  assert.match(main, /if \(!needsRegion\(\) && !shouldAutoStart\(settings\)\) setTimeout\(showLaunchHint, 1500\);/);
   assert.match(main, /'버튼을 누르시면 해당 메뉴로 바로 이동합니다\.'/);
 });
 

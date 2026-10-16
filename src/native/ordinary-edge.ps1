@@ -55,6 +55,22 @@ if (-not [string]::IsNullOrEmpty($requestLine)) {
 $requestLine = $null
 $script:CertificateSecret = $null
 
+# The 17 offices share one national system; only the host carries the office code.
+# Gyeongbuk (gbe) is the one office whose K-Edufine host is klef.gbe.kr, not klef.gbe.go.kr.
+$regionCodes = @('sen','pen','dge','ice','gen','dje','use','sje','goe','gwe','cbe','cne','jbe','jne','gbe','gne','jje')
+function Set-RegionHosts {
+    param([string]$Code)
+    if ($Code -cnotin $regionCodes) { $Code = 'sen' }
+    $script:SystemHosts = @{
+        portal = "$Code.eduptl.kr"
+        neis = "$Code.neis.go.kr"
+        edufine = $(if ($Code -ceq 'gbe') { 'klef.gbe.kr' } else { "klef.$Code.go.kr" })
+    }
+    $script:SystemOrigins = @{}
+    foreach ($key in @($script:SystemHosts.Keys)) { $script:SystemOrigins[$key] = 'https://' + $script:SystemHosts[$key] }
+}
+Set-RegionHosts -Code 'sen'
+
 function CodePoints {
     param([int[]]$Values)
     return -join ($Values | ForEach-Object { [char]$_ })
@@ -123,8 +139,7 @@ function Test-SystemPresence {
     param([object]$Public, [string]$System)
     if ($System -ceq 'portal') { return ($Public.landing -ceq 'portal' -and $Public.authenticated -eq $true) }
     if ($Public.landing -ceq $System) { return $true }
-    $origins = @{ neis = 'https://sen.neis.go.kr'; edufine = 'https://klef.sen.go.kr' }
-    return ($Public.origin -ceq $origins[$System])
+    return ($Public.origin -ceq $script:SystemOrigins[$System])
 }
 
 function Get-SystemTabState {
@@ -161,10 +176,10 @@ function Get-SessionNotice {
 
 function Get-SafeNeisTaskState {
     param([object]$Window, [object]$OriginEvidence, [bool]$LandingVerified)
-    if (-not $LandingVerified -or $OriginEvidence.origin -cne 'https://sen.neis.go.kr' -or $OriginEvidence.landingCandidate -cne 'neis') { return $null }
+    if (-not $LandingVerified -or $OriginEvidence.origin -cne $script:SystemOrigins.neis -or $OriginEvidence.landingCandidate -cne 'neis') { return $null }
     $root = if ($null -ne $Window.neisTaskRoot) { $Window.neisTaskRoot } else { $Window.uiaRoot }
     if ($null -eq $root) { return $null }
-    $target = [pscustomobject]@{ pid = [int]$Window.pid; hwnd = [string]$Window.hwnd; processStartedAt = [string]$Window.processStartedAt; origin = 'https://sen.neis.go.kr' }
+    $target = [pscustomobject]@{ pid = [int]$Window.pid; hwnd = [string]$Window.hwnd; processStartedAt = [string]$Window.processStartedAt; origin = $script:SystemOrigins.neis }
     try { $state = Get-NeisTaskState -Root $root -Target $target } catch { return $null }
     [object[]]$visibleTasks = @('attendance', 'trip' | Where-Object { $_ -in @($state.visibleTasks) })
     [object[]]$existingTabs = @('attendance', 'trip' | Where-Object { $_ -in @($state.existingTaskTabs) })
@@ -223,30 +238,34 @@ function Get-OriginEvidence {
     if ($origins.Count -gt 1) { return [pscustomobject]@{ state = 'ambiguous'; origin = $null; landingCandidate = $null } }
     if ($origins.Count -eq 0) { return [pscustomobject]@{ state = 'unavailable'; origin = $null; landingCandidate = $null } }
     $candidate = [Uri]$origins[0]
-    if ($candidate.Scheme -ceq 'https' -and $candidate.DnsSafeHost -ceq 'sen.eduptl.kr' -and $candidate.IsDefaultPort) {
-        return [pscustomobject]@{ state = 'trusted'; origin = 'https://sen.eduptl.kr'; landingCandidate = 'portal' }
+    if ($candidate.Scheme -ceq 'https' -and $candidate.DnsSafeHost -ceq $script:SystemHosts.portal -and $candidate.IsDefaultPort) {
+        return [pscustomobject]@{ state = 'trusted'; origin = $script:SystemOrigins.portal; landingCandidate = 'portal' }
     }
-    if ($candidate.Scheme -ceq 'https' -and $candidate.DnsSafeHost -ceq 'sen.neis.go.kr' -and $candidate.IsDefaultPort) {
+    if ($candidate.Scheme -ceq 'https' -and $candidate.DnsSafeHost -ceq $script:SystemHosts.neis -and $candidate.IsDefaultPort) {
         $landing = if (@($uris | Where-Object { $_.AbsolutePath -ceq '/jsp/main.jsp' }).Count -gt 0) { 'neis' } else { $null }
-        return [pscustomobject]@{ state = 'trusted'; origin = 'https://sen.neis.go.kr'; landingCandidate = $landing }
+        return [pscustomobject]@{ state = 'trusted'; origin = $script:SystemOrigins.neis; landingCandidate = $landing }
     }
-    if ($candidate.Scheme -ceq 'https' -and $candidate.DnsSafeHost -ceq 'klef.sen.go.kr' -and $candidate.IsDefaultPort) {
+    if ($candidate.Scheme -ceq 'https' -and $candidate.DnsSafeHost -ceq $script:SystemHosts.edufine -and $candidate.IsDefaultPort) {
         $landing = if (@($uris | Where-Object { $_.AbsolutePath -ceq '/keris_ui/main.do' }).Count -gt 0) { 'edufine' } else { $null }
-        return [pscustomobject]@{ state = 'trusted'; origin = 'https://klef.sen.go.kr'; landingCandidate = $landing }
+        return [pscustomobject]@{ state = 'trusted'; origin = $script:SystemOrigins.edufine; landingCandidate = $landing }
     }
     return [pscustomobject]@{ state = 'unavailable'; origin = $null; landingCandidate = $null }
 }
 
+# The portal's own menu link to NEIS or K-Edufine; its automation id is the destination URL.
+# Seoul's is the menuBtn link to http://klef.sen.go.kr/; Gangwon's portal also lists them by
+# name, pointing at https://klef.gwe.go.kr/keris_ui/main.do. Both shapes are accepted, and only
+# on the chosen office's own hosts.
 function Test-BusinessLink {
     param([object]$Control, [string]$Action)
-    if ($Control.role -cne 'Hyperlink' -or $Control.className -cne 'menuBtn' -or $Control.automationId -isnot [string]) { return $false }
+    if ($Control.role -cne 'Hyperlink' -or $Control.automationId -isnot [string]) { return $false }
     $uri = $null
     if (-not [Uri]::TryCreate($Control.automationId, [UriKind]::Absolute, [ref]$uri) -or -not $uri.IsDefaultPort) { return $false }
     if ($Action -eq 'neis') {
-        return $uri.Scheme -ceq 'https' -and $uri.DnsSafeHost -ceq 'sen.neis.go.kr' -and $uri.AbsolutePath -ceq '/cmc_fcm_lg01_000.do'
+        return $uri.Scheme -ceq 'https' -and $uri.DnsSafeHost -ceq $script:SystemHosts.neis -and $uri.AbsolutePath -ceq '/cmc_fcm_lg01_000.do'
     }
     if ($Action -eq 'edufine') {
-        return $uri.Scheme -ceq 'http' -and $uri.DnsSafeHost -ceq 'klef.sen.go.kr' -and $uri.AbsolutePath -ceq '/'
+        return $uri.Scheme -cin @('http', 'https') -and $uri.DnsSafeHost -ceq $script:SystemHosts.edufine -and $uri.AbsolutePath -cin @('/', '/keris_ui/main.do')
     }
     return $false
 }
@@ -258,7 +277,7 @@ function Get-EligibleControls {
     foreach ($control in @($Window.controls)) {
         if ($null -eq $control) { continue }
         $selectorMatch = if ($Action -eq 'login') { $control.automationId -ceq 'btnLgn' }
-                         elseif ($Action -in @('neis', 'edufine')) { Test-BusinessLink -Control $control -Action $Action }
+                         elseif ($Action -in @('neis', 'edufine')) { ($control.className -ceq 'menuBtn' -or $control.name -cin $names) -and (Test-BusinessLink -Control $control -Action $Action) }
                          else { $control.name -in $names }
         if (-not $selectorMatch) { continue }
         if ($control.role -notin $actionRoles -or $control.visible -ne $true -or $control.enabled -ne $true) { continue }
@@ -279,7 +298,7 @@ function Test-AuthenticatedWindow {
         $control.enabled -eq $true -and [int]$control.processId -eq [int]$Window.pid -and 'Invoke' -in @($control.patterns)
     }
     $portalMatches = @($Window.controls | Where-Object { (& $portalIdentity $_) -and $_.visible -eq $true })
-    if ($OriginEvidence.origin -ceq 'https://sen.eduptl.kr') {
+    if ($OriginEvidence.origin -ceq $script:SystemOrigins.portal) {
         if ($portalMatches.Count -eq 1) { return $true }
         # The link can be scrolled or clipped out of the rendered area on a short window. That
         # is not a logged-out portal: a logged-out one offers the certificate login button, and
@@ -288,7 +307,7 @@ function Test-AuthenticatedWindow {
         if ($offscreenMatches.Count -eq 1 -and @(Get-EligibleControls -Window $Window -Action 'login').Count -eq 0) { return $true }
         return $false
     }
-    if ($OriginEvidence.origin -ceq 'https://sen.neis.go.kr' -and $OriginEvidence.landingCandidate -eq 'neis') {
+    if ($OriginEvidence.origin -ceq $script:SystemOrigins.neis -and $OriginEvidence.landingCandidate -eq 'neis') {
         $neisMatches = @($Window.controls | Where-Object {
             $_.name -ceq $labels.logout -and $_.role -ceq 'Button' -and $_.visible -eq $true -and $_.enabled -eq $true -and
             [int]$_.processId -eq [int]$Window.pid -and 'Invoke' -in @($_.patterns)
@@ -761,6 +780,7 @@ function Test-ValidRequest {
         'select-my-menu', 'expand-duty', 'select-attendance-tab', 'select-trip-tab', 'open-attendance', 'open-trip'
     )
     if ($Request.command -eq 'invoke' -and ($Request.action -notin $validActions -or $null -eq $Request.target)) { return $false }
+    if ($null -ne $Request.region -and ($Request.region -isnot [string] -or $Request.region -cnotin $regionCodes)) { return $false }
     if ($Request.command -eq 'invoke' -and $null -ne $Request.requireLanding -and $Request.requireLanding -isnot [bool]) { return $false }
     if ($Request.command -eq 'invoke' -and $null -ne $Request.bringForward -and $Request.bringForward -isnot [bool]) { return $false }
     if ($null -ne $Request.restoreMinimised -and $Request.restoreMinimised -isnot [bool]) { return $false }
@@ -789,6 +809,7 @@ try {
         # Plain JSON with the password inside: fixture runs only. The app never sends this form.
         $script:CertificateSecret = $request.password
     }
+    if ($request.region -is [string]) { Set-RegionHosts -Code $request.region }
     if (-not (Test-ValidRequest -Request $request)) {
         Write-BridgeJson (New-BridgeResult -Status 'error' -Invoked $(if ($request.command -eq 'invoke') { $false } else { $null }))
         exit 0
@@ -976,12 +997,12 @@ try {
             Write-BridgeJson (New-BridgeResult -Status 'stale' -Windows @() -Invoked $false)
             exit 0
         }
-        if ($freshPublic.origin -cne 'https://sen.neis.go.kr' -or $freshPublic.landing -cne 'neis' -or $null -eq $freshPublic.neisTaskState) {
+        if ($freshPublic.origin -cne $script:SystemOrigins.neis -or $freshPublic.landing -cne 'neis' -or $null -eq $freshPublic.neisTaskState) {
             Write-BridgeJson (New-BridgeResult -Status 'unavailable' -Windows @($freshPublic) -Invoked $false)
             exit 0
         }
         $taskRoot = if ($null -ne $freshRaw.neisTaskRoot) { $freshRaw.neisTaskRoot } else { $freshRaw.uiaRoot }
-        $taskTarget = [pscustomobject]@{ pid = [int]$freshRaw.pid; hwnd = [string]$freshRaw.hwnd; processStartedAt = [string]$freshRaw.processStartedAt; origin = 'https://sen.neis.go.kr' }
+        $taskTarget = [pscustomobject]@{ pid = [int]$freshRaw.pid; hwnd = [string]$freshRaw.hwnd; processStartedAt = [string]$freshRaw.processStartedAt; origin = $script:SystemOrigins.neis }
         $taskResult = Invoke-NeisTaskAction -Root $taskRoot -Target $taskTarget -Action $request.action
         $mappedStatus = switch ($taskResult.status) { 'invoked' { 'ok' }; 'cancelled' { 'cancelled' }; default { 'unavailable' } }
         Write-BridgeJson (New-BridgeResult -Status $mappedStatus -Windows @($freshPublic) -Invoked ($taskResult.status -eq 'invoked'))

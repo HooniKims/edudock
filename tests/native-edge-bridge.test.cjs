@@ -808,3 +808,55 @@ test('Edge 154 omnibox (view_1017, renamed) is recognised by its Chromium class,
   })] }).output;
   assert.equal(pageField.windows[0].origin, null);
 });
+
+// Other 시도교육청: the same portal, with the office code in the host (from a 강원 recording,
+// 2026-10-16). The request names the office; only that office's hosts are trusted.
+function gangwonPortal() {
+  const neisUrl = 'https://gwe.neis.go.kr/cmc_fcm_lg01_000.do';
+  const link = (name, automationId) => ({ name, automationId, className: '', role: 'Hyperlink', visible: true, enabled: true, patterns: ['Invoke'], processId: 411 });
+  return windowFixture({
+    addressControls: [{ automationId: 'view_1017', className: 'OmniboxViewViews', controlType: 'Edit', isPassword: false, isOffscreen: false, value: 'https://gwe.eduptl.kr/bpm_man_mn00_001.do' }],
+    controls: [
+      { name: 'Logout', automationId: 'btn-logout', role: 'Hyperlink', visible: true, enabled: true, patterns: ['Invoke'], processId: 411, parentRole: 'Document', parentAutomationId: 'RootWebArea' },
+      link('나이스', neisUrl),
+      link('공람함', neisUrl),
+      link('나이스', '1'),
+      link('K-에듀파인', 'https://klef.gwe.go.kr/keris_ui/main.do'),
+      link('K-에듀파인', '2'),
+    ],
+  });
+}
+
+test('a 강원 request trusts gwe hosts and finds its portal links by name', () => {
+  const fixture = { windows: [gangwonPortal()] };
+  const inspected = runBridge(JSON.stringify({ command: 'inspect', region: 'gwe' }), fixture).output.windows[0];
+  assert.equal(inspected.origin, 'https://gwe.eduptl.kr');
+  assert.equal(inspected.landing, 'portal');
+  assert.equal(inspected.authenticated, true);
+  assert.ok(inspected.actions.includes('neis'));
+  assert.ok(inspected.actions.includes('edufine'));
+  const invoked = runBridge(JSON.stringify({ command: 'invoke', region: 'gwe', target: target(), action: 'edufine' }), fixture).output;
+  assert.equal(invoked.status, 'ok');
+  assert.equal(invoked.invoked, true);
+});
+
+test('another office\'s pages are not trusted, and its links are not pressed', () => {
+  const asSeoul = runBridge(JSON.stringify({ command: 'inspect', region: 'sen' }), { windows: [gangwonPortal()] }).output.windows[0];
+  assert.equal(asSeoul.origin, null);
+  assert.equal(asSeoul.authenticated, false);
+  assert.deepEqual(asSeoul.actions, []);
+  // A 서울 portal page that somehow lists a 강원 NEIS link.
+  const mixed = windowFixture({ controls: [
+    { name: '나이스', automationId: 'https://gwe.neis.go.kr/cmc_fcm_lg01_000.do', className: 'menuBtn', role: 'Hyperlink', visible: true, enabled: true, patterns: ['Invoke'], processId: 411 },
+  ] });
+  const seoul = runBridge(JSON.stringify({ command: 'inspect', region: 'sen' }), { windows: [mixed] }).output.windows[0];
+  assert.equal(seoul.origin, 'https://sen.eduptl.kr');
+  assert.equal(seoul.actions.includes('neis'), false);
+});
+
+test('경북 K-에듀파인 lives at klef.gbe.kr, and an unknown office code is refused', () => {
+  const gyeongbuk = windowFixture({ addressControls: [{ automationId: 'view_1017', className: 'OmniboxViewViews', controlType: 'Edit', isPassword: false, isOffscreen: false, value: 'https://klef.gbe.kr/keris_ui/main.do' }] });
+  assert.equal(runBridge(JSON.stringify({ command: 'inspect', region: 'gbe' }), { windows: [gyeongbuk] }).output.windows[0].origin, 'https://klef.gbe.kr');
+  assert.equal(runBridge(JSON.stringify({ command: 'inspect', region: 'xyz' }), { windows: [gyeongbuk] }).output.status, 'error');
+  assert.equal(runBridge(JSON.stringify({ command: 'inspect', region: 7 }), { windows: [gyeongbuk] }).output.status, 'error');
+});
