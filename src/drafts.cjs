@@ -22,7 +22,6 @@ function generateDraft(input) {
   const warnings = [];
   const when = dateLabel(v.date) + (v.startTime ? ` ${v.startTime}${v.endTime ? `~${v.endTime}` : ''}` : '');
   const attachments = v.attachments.split('\n').map(x => x.trim()).filter(Boolean);
-  if (!v.basis) warnings.push('관련 근거가 없어 관련 항목을 생략했습니다.');
   if (attachments.length) warnings.push('붙임 표기만 작성했습니다. 실제 파일 첨부와 개수를 확인하세요.');
   const lines = []; let number = 1;
   if (v.basis) lines.push(`${number++}. 관련: ${v.basis}`);

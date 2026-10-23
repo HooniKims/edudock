@@ -2,9 +2,9 @@
 
 // Full product QA against the INSTALLED widget, driven the way a teacher drives it: real
 // clicks on the notch buttons and the auxiliary window's own form, never internal shortcuts.
-// Nothing is saved or submitted; the draft it types is clearly marked as a sample.
+// A clearly marked sample is saved locally to exercise the saved list; nothing is submitted.
 //
-//   node scripts/qa-v2-full.cjs [--only s3,s5] [--skip s4] [--exe <path>]
+//   node scripts/qa-v2-full.cjs [--only s3,s5] [--skip s4] [--exe <path>] [--profile <path>] [--software-rendering]
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -23,11 +23,7 @@ const redact = text => String(text ?? '').replace(/https?:\/\/[^\s)]+/gi, '[URL]
 
 const SAMPLE = {
   title: '[샘플·상신금지] 위젯 전체 점검',
-  purpose: '업무포털 도우미의 초안 생성과 기안문 입력을 점검합니다.',
-  basis: '업무포털 도우미 점검 계획',
-  date: '2026-09-25',
-  place: '교무실',
-  audience: '점검 담당',
+  purpose: '1. 관련: 업무포털 도우미 점검 계획\n2. 업무포털 도우미의 내용 저장과 초안 생성을 점검합니다.\n  가. 입력한 들여쓰기와 문단 구분을 유지합니다.',
 };
 
 // Counts Edge tabs without touching them, so a scenario can prove it opened none.
@@ -180,9 +176,11 @@ function editorCount() {
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.EDUDOCK_QA_PROFILE;
+  const profile = option('--profile', '');
+  if (profile) env.EDUDOCK_QA_PROFILE = path.resolve(profile);
   startStandIn();
   report.background = background;
-  const app = await electron.launch({ executablePath, args: [], env });
+  const app = await electron.launch({ executablePath, args: argv.includes('--software-rendering') ? ['--no-sandbox', '--disable-gpu', '--in-process-gpu'] : [], env });
   try {
     const first = await app.firstWindow();
     await first.waitForLoadState('domcontentloaded');
@@ -264,7 +262,7 @@ function editorCount() {
     const startupFrontBefore = background ? ensureBackground() : null;
     const startup = await idle();
     record('s1-startup', {
-      ok: startup.settled && startup.timeline.some(step => ['done', 'authenticated'].includes(step.phase)),
+      ok: startup.settled && startup.timeline.some(step => ['idle', 'done', 'authenticated'].includes(step.phase)),
       ms: startup.ms, timeline: startup.timeline,
       foreground: background ? { before: startupFrontBefore, after: frontProcess() } : null,
       note: `${startup.ms}ms, last=${startup.timeline.at(-1)?.phase}${background ? `, 앞창 ${startupFrontBefore}→${frontProcess()}` : ''}`,
@@ -299,10 +297,10 @@ function editorCount() {
       await aux.waitForSelector('#draft-view:not([hidden])', { timeout: 15000 });
       await aux.locator('[name=title]').fill(SAMPLE.title);
       await aux.locator('[name=purpose]').fill(SAMPLE.purpose);
-      await aux.locator('[name=basis]').fill(SAMPLE.basis);
-      await aux.locator('[name=date]').fill(SAMPLE.date);
-      await aux.locator('[name=place]').fill(SAMPLE.place);
-      await aux.locator('[name=audience]').fill(SAMPLE.audience);
+      await aux.locator('#save-content').click();
+      await aux.waitForFunction(() => document.querySelectorAll('.saved-pick').length > 0);
+      const saved = await aux.evaluate(() => window.portal.draftsList());
+      const rawSaveMatches = saved.some(item => item.title === SAMPLE.title && item.body === SAMPLE.purpose);
       await aux.locator('#generate-button').click();
       await aux.locator('#draft-output').waitFor({ state: 'visible', timeout: 15000 });
       const body = await aux.locator('#result-body').inputValue();
@@ -313,7 +311,8 @@ function editorCount() {
       const fillVisible = await aux.locator('#fill-draft').isVisible();
       composed = { title, body };
       record('s3-compose', {
-        ok: body.length > 40 && clipboard.includes(SAMPLE.title) && fillVisible,
+        ok: rawSaveMatches && body.length > 40 && clipboard.includes(SAMPLE.title) && fillVisible,
+        rawSaveMatches,
         titleLength: title.length, bodyLength: body.length, paragraphs: body.split(/\r?\n/).filter(Boolean).length,
         clipboardMatches: clipboard.includes(SAMPLE.title), fillButtonVisible: fillVisible,
         tabsBefore, tabsAfter: edgeTabCount(),

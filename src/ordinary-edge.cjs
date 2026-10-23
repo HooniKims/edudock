@@ -270,6 +270,7 @@ const HELPER_REASON_MESSAGES = {
   'editor-script-unavailable': '기안창이 초안 입력에 응답하지 않았습니다. 기안창이 완전히 열린 뒤 다시 시도해 주세요.',
   'editor-api-missing': '기안창이 예상한 편집 기능을 제공하지 않아 초안을 넣지 않았습니다.',
   'body-field-unreachable': '기안창의 본문 칸으로 이동하지 못해 본문을 넣지 않았습니다. 기안창을 확인한 뒤 다시 시도해 주세요.',
+  'body-view-unreachable': '제목과 본문은 입력했지만 본문 화면으로 이동하지 못했습니다. 기안창에서 본문을 직접 확인해 주세요.',
   'unexpected-form': '열린 기안창이 일반기안문 서식이 아니어서 초안을 넣지 않았습니다.',
   'editor-not-found': '초안을 넣을 기안창을 찾지 못했습니다. 다시 시도해 주세요.',
   'draft-content-empty': '넣을 초안의 제목이나 본문이 비어 있습니다.',

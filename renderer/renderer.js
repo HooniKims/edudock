@@ -97,6 +97,7 @@ function showView(name) {
   if (!next) return;
   all('.view').forEach((view) => { view.hidden = view !== next; });
   activeView = name;
+  if (name === 'draft') growResultBody();
   document.querySelector('.content').scrollTop = 0;
   document.title = `${name === 'draft' ? '초안 만들기' : name === 'settings' ? '내 업무 환경' : '업무 곁'} · 업무포털 도우미`;
   const heading = next.querySelector('h1');
@@ -287,6 +288,7 @@ function focusSection(name) {
 // is resized so neither the form nor the draft needs scrolling (never beyond the screen).
 function growResultBody() {
   const body = element('result-body');
+  if (element('draft-output').hidden || element('draft-view').hidden) return;
   body.style.height = 'auto';
   body.style.height = `${Math.max(160, body.scrollHeight + 4)}px`;
 }
@@ -402,7 +404,8 @@ element('draft-form').addEventListener('submit', async (event) => {
   finally { button.disabled = false; button.textContent = '초안 다시 생성'; }
 });
 
-element('result-body').addEventListener('input', growResultBody);
+element('result-body').addEventListener('input', () => { growResultBody(); fitDraftWindow(); });
+window.addEventListener('resize', growResultBody);
 // ---- 저장한 초안: kept on this PC, picked later and put into a 기안창 ----
 let savedDrafts = [];
 let pickedDraftId = null;
@@ -431,7 +434,7 @@ function renderSavedDrafts() {
     remove.title = '목록에서 지우기';
     remove.setAttribute('aria-label', `${item.title} 지우기`);
     remove.addEventListener('click', async () => {
-      try { savedDrafts = await invoke('draftsRemove', item.id); if (pickedDraftId === item.id) pickedDraftId = null; renderSavedDrafts(); status('저장한 초안을 지웠어요.', 'success'); fitDraftWindow(); }
+      try { savedDrafts = await invoke('draftsRemove', item.id); if (pickedDraftId === item.id) pickedDraftId = null; renderSavedDrafts(); status('저장한 내용을 지웠어요.', 'success'); fitDraftWindow(); }
       catch (error) { report(error); }
     });
     row.append(pick, remove);
@@ -454,6 +457,9 @@ function showDraftOutput(title, body) {
 }
 function loadSavedDraft(item) {
   pickedDraftId = item.id;
+  const form = element('draft-form');
+  form.elements.namedItem('title').value = item.title;
+  form.elements.namedItem('purpose').value = item.body;
   element('draft-warnings').hidden = true;
   showDraftOutput(item.title, item.body);
   renderSavedDrafts();
@@ -468,17 +474,28 @@ element('copy-draft').addEventListener('click', async () => {
     status('초안을 클립보드에 복사했어요.', 'success');
   } catch (error) { report(error); }
 });
-element('keep-draft').addEventListener('click', async () => {
-  const draft = draftContents();
-  if (!draft.title || !draft.body.trim()) { status('제목과 초안 내용이 있어야 저장할 수 있어요.', 'idle'); return; }
+async function keepDraft(draft, button, showSavedContent = false) {
+  if (!draft.title || !draft.body.trim()) { status('제목과 본문 내용을 입력한 뒤 저장해 주세요.', 'idle'); return; }
+  button.disabled = true;
   try {
     savedDrafts = await invoke('draftsSave', draft);
     pickedDraftId = savedDrafts[0]?.id ?? null;
+    if (showSavedContent) {
+      element('draft-warnings').hidden = true;
+      showDraftOutput(draft.title, draft.body);
+    }
     renderSavedDrafts();
     fitDraftWindow();
-    status(`"${draft.title}"을 저장한 초안 목록에 넣었어요.`, 'success');
+    status(`"${draft.title}"을 저장한 내용 목록에 넣었어요.`, 'success');
   } catch (error) { report(error); }
+  finally { button.disabled = false; }
+}
+element('save-content').addEventListener('click', (event) => {
+  const form = element('draft-form');
+  if (!form.reportValidity()) return;
+  return keepDraft({ title: form.elements.namedItem('title').value.trim(), body: form.elements.namedItem('purpose').value }, event.currentTarget, true);
 });
+element('keep-draft').addEventListener('click', (event) => keepDraft(draftContents(), event.currentTarget));
 element('save-draft').addEventListener('click', async () => {
   try {
     const result = await invoke('saveDraft', draftContents());

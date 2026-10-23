@@ -960,6 +960,24 @@ function Build-DraftFillScript {
       var key = flat(wanted[j]);
       if (key.length > 0 && placed[key] !== true) { bodyOk = false; break; }
     }
+    // Field navigation alone does not switch the page from approval information to the
+    // actual document. Select the observed body tab first, then position the document at its
+    // body after all verification reads. Neither step inserts or formats the text again.
+    if (titleOk && bodyOk) {
+      try {
+        var bodyTab = document.getElementById('maindoc1');
+        var bodyLinks = bodyTab ? bodyTab.getElementsByTagName('a') : [];
+        if (bodyLinks.length !== 1 || flat(bodyLinks[0].innerText || bodyLinks[0].textContent) !== BODY_FIELD) {
+          throw new Error('body-tab');
+        }
+        bodyLinks[0].click();
+        window.IMPL_MovePos(W, 2, 0, 0);
+        if (window.IMPL_MoveToField(W, BODY_FIELD) !== true) { throw new Error('body-view'); }
+      } catch (viewError) {
+        document.title = 'EDFILL::body-view-unreachable';
+        return;
+      }
+    }
     document.title = 'EDFILL::written|' + (titleOk ? '1' : '0') + '|' + (bodyOk ? '1' : '0');
 "@
     }
