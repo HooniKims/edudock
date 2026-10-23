@@ -18,7 +18,7 @@ const relative = file => path.relative(root, file).replaceAll('\\', '/');
   // A profile that has already answered the 교육청 question; an unanswered one opens it instead.
   fs.writeFileSync(path.join(profile, 'settings.json'), JSON.stringify({ schemaVersion: 4, displayMode: 'auto', region: 'sen', regionConfirmed: true }));
   const app = await electron.launch({
-    args: [path.join(root, 'scripts', 'qa-v2-ordinary-adapter-bootstrap.cjs')],
+    args: [...(process.env.EDUDOCK_QA_SOFTWARE_RENDERING === '1' ? ['--no-sandbox', '--disable-gpu', '--in-process-gpu'] : []), path.join(root, 'scripts', 'qa-v2-ordinary-adapter-bootstrap.cjs')],
     cwd: root,
     env: { ...process.env, EDUDOCK_QA_PROFILE: profile, EDUDOCK_QA_ORDINARY_ADAPTER_LOG: nativeLog },
   });
@@ -103,7 +103,8 @@ const relative = file => path.relative(root, file).replaceAll('\\', '/');
     report.pass = true;
   } finally {
     await app.close().catch(() => {});
-    await fs.promises.rm(profile, { recursive: true, force: true });
+    if (path.dirname(path.resolve(profile)) !== path.resolve(attempt)) throw new Error('QA profile must remain inside this attempt');
+    await fs.promises.rm(profile, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
     report.cleanup = { electronClosed: true, ownedProfileRemoved: !fs.existsSync(profile), ordinaryEdgeUntouched: true };
     fs.writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`);
     fs.mkdirSync(evidenceRoot, { recursive: true });

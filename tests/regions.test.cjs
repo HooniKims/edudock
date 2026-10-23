@@ -78,7 +78,7 @@ test('every native request carries the active office', async () => {
 test('the widget asks for the office before anything else and blocks presses until it is answered', () => {
   const main = fs.readFileSync('src/main.cjs', 'utf8');
   assert.match(main, /if \(needsRegion\(\)\) setTimeout\(\(\) => \{ try \{ showRegionPrompt\(\); \} catch \{\} \}, 1200\);/);
-  assert.match(main, /if \(needsRegion\(\)\) \{\n\s+showRegionPrompt\(\);\n\s+return \{ ok: false, phase: 'needs-region'/);
+  assert.match(main, /if \(needsRegion\(\)\) \{\r?\n\s+showRegionPrompt\(\);\r?\n\s+return \{ ok: false, phase: 'needs-region'/);
   assert.match(main, /setActiveRegion\(settings\.region\);/);
   const popup = fs.readFileSync('renderer/popup.html', 'utf8');
   assert.match(popup, /id="region-grid"/);
