@@ -151,6 +151,17 @@ test('NEIS is included by default with permission; revocation prevents injection
   await revoked.message({ type: 'run-now' });
   assert.equal(revoked.calls.some(c => c.world), false);
 });
+
+test('all 17 office portal main URLs are selected only with site permission', async () => {
+  const codes = ['sen', 'pen', 'dge', 'ice', 'gen', 'dje', 'use', 'sje', 'goe', 'gwe', 'cbe', 'cne', 'jbe', 'jne', 'gbe', 'gne', 'jje'];
+  const tabs = codes.map((code, index) => ({ id: index + 1, url: `https://${code}.eduptl.kr/bpm_man_mn00_001.do` }));
+  tabs.push({ id: 99, url: 'https://sen.eduptl.kr.evil.example/bpm_man_mn00_001.do' });
+  const w = worker({ granted: codes.map(code => `https://${code}.eduptl.kr/*`), tabs });
+  const selected = await vm.runInContext('sessionTabs()', w.context);
+  assert.deepEqual(Array.from(selected, tab => tab.id), codes.map((_, i) => i + 1));
+  const limited = worker({ granted: ['https://sen.eduptl.kr/*'], tabs });
+  assert.deepEqual(Array.from(await vm.runInContext('sessionTabs()', limited.context), tab => tab.id), [1]);
+});
 test('concurrent manual/alarm runs share a single request and log; MAIN used for NEIS', async () => {
   const w = worker({ allowed: true, neisEnabled: true });
   await vm.runInContext('Promise.all([keepAlive("manual"), keepAlive("alarm")])', w.context);

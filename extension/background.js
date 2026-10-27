@@ -73,9 +73,23 @@ function readTimerInPage() {
 
 function pressExtendInPage() {
   const LABELS = ['세션 시간 초기화', '로그아웃 30분 연장', '세션 연장', '로그인 연장', '시간 연장', '시간연장'];
-  const label = el => (el.getAttribute('aria-label') || el.getAttribute('title') || el.textContent || el.value || '').replace(/\s+/g, ' ').trim();
-  const nodes = [...document.querySelectorAll('button, a, [role="button"], input[type="button"]')];
-  const target = nodes.find(el => LABELS.includes(label(el)));
+  // An icon button can get its accessible name from a child image's alt/title.
+  // Check each label separately: a generic aria-label must not mask a useful title.
+  const normalize = value => String(value || '').replace(/\s+/g, ' ').trim();
+  const label = el => {
+    const labels = [el.getAttribute('aria-label'), el.getAttribute('title'), el.textContent, el.value, el.getAttribute('alt')];
+    for (const child of el.querySelectorAll('img[alt], [title], [aria-label], svg title')) {
+      labels.push(child.getAttribute('alt'), child.getAttribute('title'), child.getAttribute('aria-label'), child.tagName.toLowerCase() === 'title' ? child.textContent : '');
+    }
+    return labels.map(normalize).find(text => LABELS.includes(text)) || null;
+  };
+  const nodes = [...document.querySelectorAll('button, a, [role="button"], input[type="button"], input[type="image"]')];
+  const target = nodes.find(el => {
+    if (el.disabled || el.getAttribute('aria-disabled') === 'true') return false;
+    const box = el.getBoundingClientRect();
+    const style = window.getComputedStyle(el);
+    return box.width > 0 && box.height > 0 && style.visibility !== 'hidden' && style.visibility !== 'collapse' && label(el);
+  });
   if (!target) return { clicked: null };
   // K-에듀파인 is a Nexacro page: its buttons react to mouse events, not to element.click() alone.
   const box = target.getBoundingClientRect();

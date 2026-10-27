@@ -48,7 +48,7 @@ async function render() {
   $('allow').disabled = !chosen;
   $('region-status').textContent = ready
     ? `${regionName(region)} 교육청의 업무포털·K-에듀파인·나이스에서 동작합니다.`
-    : '교육청을 고르고 [사용 허용]을 눌러 주세요. Edge 권한 창에서 [허용]을 직접 눌러야 합니다.';
+    : '교육청을 고르고 [사용 허용]을 눌러 주세요. 브라우저 권한 창에서 [허용]을 직접 눌러야 합니다.';
   $('region-status').className = ready ? 'hint' : 'hint attention';
   $('log').replaceChildren(...(state.log || []).map(entry => {
     const { cls, text } = describe(entry);
