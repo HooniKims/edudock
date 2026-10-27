@@ -18,6 +18,7 @@ const { createUpdater, RELEASE_REPOSITORY } = require('./updater.cjs');
 const { createSavedDrafts } = require('./saved-drafts.cjs');
 const { createDiagnosticLog } = require('./diagnostic-log.cjs');
 const { createLoginItem, loginItemMode, launchCommand, AUTOSTART_ARG } = require('./login-item.cjs');
+const { browserAvailability, setActiveBrowser, requireBrowser, openBrowserUrl } = require('./browsers.cjs');
 const { REGIONS, isRegionCode, regionName, setActiveRegion } = require('./regions.cjs');
 
 let notch;
@@ -44,6 +45,7 @@ let secrets = null;
 let storedPasswordLost = false;
 let diagnosticLog = null;
 let nativeBridges = [];
+let browsers = [];
 let loginItem = null;
 
 function guideAnchorButton(step) {
@@ -116,7 +118,7 @@ function state() {
   }
   const displays = screen.getAllDisplays().length ? describeDisplays(screen.getAllDisplays(), screen.getPrimaryDisplay().id) : [];
   const placementLabel = settings?.placement && displays.length ? describePlacement(displays, settings.placement, screen.getPrimaryDisplay().id) : '';
-  return { settings, regions: REGIONS, placementMaxScale, displays, placementLabel, authenticationPending: Boolean(automation?.operation), passwordStorageAvailable: Boolean(secrets?.available()), update: updater?.state || null, operation: currentStatus, interaction: notch?.interaction || null, loginItem: loginItem?.state || null, version: app.getVersion() };
+  return { settings, browsers, regions: REGIONS, placementMaxScale, displays, placementLabel, authenticationPending: Boolean(automation?.operation), passwordStorageAvailable: Boolean(secrets?.available()), update: updater?.state || null, operation: currentStatus, interaction: notch?.interaction || null, loginItem: loginItem?.state || null, version: app.getVersion() };
 }
 
 function registerWindow(window, role) {
@@ -193,6 +195,7 @@ function createAuxiliaryWindow() {
 }
 
 function showAuxiliary(view, section = null) {
+  if (view === 'settings') browsers = browserAvailability();
   const target = view === 'settings' ? 'settings' : 'draft';
   // Anything about an update opens settings on the update row itself; so does opening settings
   // while an update is waiting to be fetched, fetched or installed.
@@ -246,6 +249,15 @@ function applySettings(patch) {
   if (cleaned.autoLogin === true && settings.passwordSaved !== true) throw new Error('먼저 인증서 비밀번호를 저장해 주세요. 저장하면 자동 로그인이 켜집니다.');
   // Starting with Windows also writes the registry, so it goes through its own request.
   delete cleaned.launchAtLogin;
+  if (Object.hasOwn(cleaned, 'browser') && cleaned.browser !== settings.browser) {
+    automation?.cancel({ silent: true });
+    if (automation) automation.retryAction = null;
+    for (const bridge of nativeBridges) bridge.stopWorker();
+    setActiveBrowser(cleaned.browser);
+    browsers = browserAvailability();
+    currentStatus = { phase: 'idle', label: '업무 대기', message: '브라우저를 변경했습니다. 업무를 다시 선택해 주세요.', busy: false };
+    sendManaged('status', currentStatus);
+  }
   const cleanedPlacement = cleaned.placement || {};
   settings = sanitizedSettings({
     ...settings,
@@ -465,6 +477,8 @@ app.on('second-instance', () => {
 app.whenReady().then(() => {
   settings = loadSettings(app.getPath('userData'));
   setActiveRegion(settings.region);
+  setActiveBrowser(settings.browser);
+  browsers = browserAvailability();
   diagnosticLog = createDiagnosticLog({ directory: app.getPath('userData') });
   diagnosticLog.append('app-start', { version: app.getVersion(), detail: `${process.windowsStore ? 'store' : app.isPackaged ? 'installed' : 'development'}${process.argv.includes(AUTOSTART_ARG) ? ' login' : ''}` });
   if (settings.autoLogin && settings.passwordSaved !== true) settings = sanitizedSettings({ ...settings, autoLogin: false });
@@ -554,7 +568,7 @@ app.whenReady().then(() => {
 
   const ordinaryEdge = new OrdinaryEdgeAdapter({
     runNative: (request, operation) => ordinaryEdgeBridge.run(request, operation),
-    openExternal: url => shell.openExternal(url),
+    openExternal: url => openBrowserUrl(url, { openExternal: target => shell.openExternal(target) }),
     draftHandoff,
     // The auto-login switch decides whether the saved password is typed in: on, every button logs
     // in by itself; off, the certificate window waits for the teacher.
@@ -567,7 +581,10 @@ app.whenReady().then(() => {
     },
   });
   automation = new PortalAutomation({
-    openPortal: (url, operation, options) => ordinaryEdge.openOfficialPortal(url, operation, options),
+    openPortal: (url, operation, options) => {
+      requireBrowser(settings.browser);
+      return ordinaryEdge.openOfficialPortal(url, operation, options);
+    },
     observeAuthenticated: operation => ordinaryEdge.observeAuthenticated(operation),
     resumeAction: (action, operation, options) => ordinaryEdge.resumeAction(action, operation, options),
     autoLogin: settings.autoLogin,

@@ -6,6 +6,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'browser-profile.ps1')
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 
 $neisTaskModule = Join-Path $PSScriptRoot 'neis-tasks.ps1'
@@ -146,7 +147,7 @@ function Get-SystemTabState {
     param([object]$Window)
     $tabs = @($Window.systemTabs | Where-Object {
         $_.system -in @('portal', 'neis', 'edufine') -and $_.role -ceq 'TabItem' -and
-        $_.className -ceq 'EdgeTab' -and $_.automationId -ceq 'view_24' -and
+        (Test-BrowserTab -ClassName $_.className -AutomationId $_.automationId) -and
         $_.visible -eq $true -and $_.enabled -eq $true -and $_.selectionAvailable -eq $true -and
         [int]$_.processId -eq [int]$Window.pid
     })
@@ -203,27 +204,79 @@ function Test-ForegroundWindow {
     try { return ([OrdinaryEdgeNativeV1]::GetForegroundWindow() -eq [IntPtr][int64]$Window.hwnd) } catch { return $false }
 }
 
+# Measured on Aside and Chrome: the tab's RootWebArea is directly under the native
+# render host, Chrome_WidgetWin_1, MultiContentsView and BrowserView. An iframe has
+# a Document ancestor first; the agent panel instead has ContentParentView/SidePanel.
+function Test-TopLevelBrowserDocument {
+    param([object]$Document, [int]$OwnerPid)
+    $profile = $script:BrowserProfile.documentRoot
+    if ($null -eq $profile -or $null -eq $Document -or $Document.controlType -cne 'Document' -or
+        $Document.isPassword -eq $true -or $Document.isOffscreen -eq $true -or
+        $Document.automationId -cne $profile.automationId -or $Document.className -cne $profile.className -or
+        [int]$Document.processId -ne $OwnerPid) { return $false }
+    $parents = @($Document.parents)
+    $classes = @($profile.parentClasses)
+    if ($classes.Count -eq 0 -or $parents.Count -ne $classes.Count) { return $false }
+    for ($index = 0; $index -lt $classes.Count; $index++) {
+        if ($parents[$index].className -cne $classes[$index] -or $parents[$index].controlType -cne 'Pane' -or
+            [int]$parents[$index].processId -ne $OwnerPid) { return $false }
+    }
+    # A web page's CSS class names cannot stand in for the native render host.
+    return ([int64]$parents[0].nativeWindowHandle -ne 0)
+}
+
+function Get-TopLevelBrowserUrl {
+    param([object]$Window)
+    $documents = @($Window.documents | Where-Object { Test-TopLevelBrowserDocument -Document $_ -OwnerPid $Window.pid })
+    if ($documents.Count -ne 1 -or $documents[0].value -isnot [string]) { return $null }
+    $uri = $null
+    if (-not [Uri]::TryCreate($documents[0].value, [UriKind]::Absolute, [ref]$uri) -or
+        $uri.Scheme -cnotin @('http', 'https') -or $uri.UserInfo.Length -ne 0) { return $null }
+    $addresses = @($Window.addressControls | Where-Object {
+        $_.controlType -ceq 'Edit' -and $_.isPassword -ne $true -and $_.isOffscreen -ne $true -and
+        [int]$_.processId -eq [int]$Window.pid -and
+        $_.className -ceq $script:BrowserProfile.addressClass -and
+        $_.parentClassName -ceq 'LocationBarView' -and $_.parentControlType -ceq 'Group' -and
+        [int]$_.parentProcessId -eq [int]$Window.pid
+    })
+    if ($addresses.Count -ne 1 -or $addresses[0].value -isnot [string]) { return $null }
+    $addressText = $addresses[0].value
+    $addressUri = $null
+    if ($addressText -cmatch '^https?://') {
+        if (-not [Uri]::TryCreate($addressText, [UriKind]::Absolute, [ref]$addressUri)) { return $null }
+    } else {
+        # This only parses the omnibox host for comparison. The trusted scheme and
+        # landing path always come from the document ValuePattern, never this prefix.
+        if ($addressText -cnotmatch '^[A-Za-z0-9.-]+(?::[0-9]+)?(?:[/?#]|$)') { return $null }
+        if (-not [Uri]::TryCreate(($uri.Scheme + '://' + $addressText), [UriKind]::Absolute, [ref]$addressUri)) { return $null }
+    }
+    if ($addressUri.UserInfo.Length -ne 0 -or $addressUri.Scheme -cne $uri.Scheme -or
+        $addressUri.DnsSafeHost -ine $uri.DnsSafeHost -or $addressUri.Port -ne $uri.Port) { return $null }
+    return $uri.AbsoluteUri
+}
+
 function Get-OriginEvidence {
     param([object]$Window)
     $rawValues = [System.Collections.Generic.List[string]]::new()
-    foreach ($address in @($Window.addressControls)) {
-        if ($null -eq $address -or $address.controlType -ne 'Edit' -or $address.isPassword -eq $true -or $address.isOffscreen -eq $true) { continue }
-        # Edge renumbers the omnibox id and renames it between releases (Edge 154: view_1017,
-        # '주소 표시줄 및 검색 창'), so its Chromium class is the primary signal and the ids and
-        # names are only fallbacks.
-        if ($address.className -cne 'OmniboxViewViews' -and $address.automationId -notin @('view_1021', 'view_1017', 'addressEditBox') -and $address.name -notin @(
-            (CodePoints @(0xC8FC,0xC18C)) + ' ' + (CodePoints @(0xD45C,0xC2DC,0xC904)) + ' ' + (CodePoints @(0xBC0F)) + ' ' + (CodePoints @(0xAC80,0xC0C9)) + ' ' + (CodePoints @(0xCC3D)),
-            (CodePoints @(0xC8FC,0xC18C)) + ' ' + (CodePoints @(0xBC0F)) + ' ' + (CodePoints @(0xAC80,0xC0C9)) + ' ' + (CodePoints @(0xCC3D)),
-            (CodePoints @(0xAC80,0xC0C9)) + ' ' + (CodePoints @(0xB610,0xB294)) + ' ' + (CodePoints @(0xC6F9)) + ' ' + (CodePoints @(0xC8FC,0xC18C)) + ' ' + (CodePoints @(0xC785,0xB825)),
-            (CodePoints @(0xC8FC,0xC18C)) + ' ' + (CodePoints @(0xD45C,0xC2DC,0xC904)),
-            'Address and search bar', 'Search or enter web address', 'Address bar'
-        )) { continue }
-        if ($address.value -is [string] -and $address.value.Length -gt 0) { $rawValues.Add($address.value) }
-        if ($address.legacyValue -is [string] -and $address.legacyValue.Length -gt 0) { $rawValues.Add($address.legacyValue) }
-    }
-    foreach ($document in @($Window.documents)) {
-        if ($null -eq $document -or $document.controlType -ne 'Document' -or $document.isPassword -eq $true -or $document.isOffscreen -eq $true) { continue }
-        if ($document.legacyValue -is [string] -and $document.legacyValue.Length -gt 0) { $rawValues.Add($document.legacyValue) }
+    if ($script:BrowserProfile.originSource -ceq 'top-level-document') {
+        $documentUrl = Get-TopLevelBrowserUrl -Window $Window
+        if ($null -eq $documentUrl) { return [pscustomobject]@{ state = 'unavailable'; origin = $null; landingCandidate = $null } }
+        $rawValues.Add($documentUrl)
+    } else {
+        # Edge retains the original omnibox/legacy evidence path unchanged.
+        foreach ($address in @($Window.addressControls)) {
+            if ($null -eq $address -or $address.controlType -ne 'Edit' -or $address.isPassword -eq $true -or $address.isOffscreen -eq $true) { continue }
+            # Chromium's class is stable; ids and names are measured per browser as fallbacks.
+            if ($address.className -cne $script:BrowserProfile.addressClass -and
+                $address.automationId -cnotin $script:BrowserProfile.addressIds -and
+                $address.name -cnotin $script:BrowserProfile.addressNames) { continue }
+            if ($address.value -is [string] -and $address.value.Length -gt 0) { $rawValues.Add($address.value) }
+            if ($address.legacyValue -is [string] -and $address.legacyValue.Length -gt 0) { $rawValues.Add($address.legacyValue) }
+        }
+        foreach ($document in @($Window.documents)) {
+            if ($null -eq $document -or $document.controlType -ne 'Document' -or $document.isPassword -eq $true -or $document.isOffscreen -eq $true) { continue }
+            if ($document.legacyValue -is [string] -and $document.legacyValue.Length -gt 0) { $rawValues.Add($document.legacyValue) }
+        }
     }
     $origins = [System.Collections.Generic.List[string]]::new()
     $uris = [System.Collections.Generic.List[Uri]]::new()
@@ -519,14 +572,14 @@ public static class OrdinaryEdgeNativeV1 {
     // is only ever raised while they are still in Edge, the widget or a 기안창 (or on the bare
     // desktop); otherwise the task finishes quietly behind their work.
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassNameW(IntPtr hWnd, System.Text.StringBuilder name, int size);
-    public static bool UserElsewhere() {
+    public static bool UserElsewhere(string browserProcess) {
         IntPtr fg = GetForegroundWindow();
         if (fg == IntPtr.Zero) return false;
         uint pid = 0;
         GetWindowThreadProcessId(fg, out pid);
         string name;
         try { name = System.Diagnostics.Process.GetProcessById((int)pid).ProcessName; } catch { return false; }
-        foreach (string ours in new[] { "msedge", "EduDock", "electron", "WXSClient" }) {
+        foreach (string ours in new[] { browserProcess, "EduDock", "electron", "WXSClient" }) {
             if (string.Equals(name, ours, StringComparison.OrdinalIgnoreCase)) return false;
         }
         System.Text.StringBuilder cls = new System.Text.StringBuilder(64);
@@ -572,6 +625,9 @@ public static class OrdinaryEdgeNativeV1 {
 function Restore-TargetWindow {
     param([IntPtr]$Handle)
     Initialize-EdgeNativeApi
+    [uint32]$owner = 0
+    $null = [OrdinaryEdgeNativeV1]::GetWindowThreadProcessId($Handle, [ref]$owner)
+    if (-not (Test-BrowserProcess -OwnerPid $owner)) { return $false }
     if (-not [OrdinaryEdgeNativeV1]::IsWindow($Handle) -or -not [OrdinaryEdgeNativeV1]::IsIconic($Handle)) { return $false }
     $null = [OrdinaryEdgeNativeV1]::ShowWindowAsync($Handle, 4)
     Start-Sleep -Milliseconds 400
@@ -591,7 +647,7 @@ function Restore-MinimisedEdgeWindows {
         $owner = [uint32]0
         $null = [OrdinaryEdgeNativeV1]::GetWindowThreadProcessId($Handle, [ref]$owner)
         $process = Get-Process -Id $owner -ErrorAction SilentlyContinue
-        if ($null -ne $process -and $process.ProcessName -ceq 'msedge') {
+        if ($null -ne $process -and $process.ProcessName -ieq $script:BrowserProfile.processName) {
             $null = [OrdinaryEdgeNativeV1]::ShowWindowAsync($Handle, 4)
             $script:restoredEdgeWindows += 1
         }
@@ -613,7 +669,7 @@ function Get-RealWindows {
         $owner = [uint32]0
         $null = [OrdinaryEdgeNativeV1]::GetWindowThreadProcessId($Handle, [ref]$owner)
         $process = Get-Process -Id $owner -ErrorAction SilentlyContinue
-        if ($null -ne $process -and $process.ProcessName -ceq 'msedge') {
+        if ($null -ne $process -and $process.ProcessName -ieq $script:BrowserProfile.processName) {
             $handles.Add([pscustomobject]@{ pid = [int]$owner; hwnd = $Handle.ToInt64() })
         }
         return $true
@@ -623,26 +679,20 @@ function Get-RealWindows {
     $windows = [System.Collections.Generic.List[object]]::new()
     foreach ($handle in $handles) {
         $process = Get-Process -Id $handle.pid -ErrorAction SilentlyContinue
-        if ($null -eq $process -or $process.ProcessName -cne 'msedge') { continue }
+        if ($null -eq $process -or $process.ProcessName -ine $script:BrowserProfile.processName) { continue }
         $root = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$handle.hwnd)
         if ($null -eq $root -or $root.Current.ProcessId -ne $handle.pid -or $root.Current.IsOffscreen) { continue }
 
         $addressConditions = [System.Collections.Generic.List[System.Windows.Automation.Condition]]::new()
-        $omniboxClass = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ClassNameProperty, 'OmniboxViewViews')
+        $omniboxClass = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ClassNameProperty, $script:BrowserProfile.addressClass)
         $omniboxType = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit)
         $addressConditions.Add([System.Windows.Automation.AndCondition]::new($omniboxType, $omniboxClass))
-        foreach ($automationId in @('view_1021', 'view_1017', 'addressEditBox')) {
+        foreach ($automationId in $script:BrowserProfile.addressIds) {
             $idCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::AutomationIdProperty, $automationId)
             $typeCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit)
             $addressConditions.Add([System.Windows.Automation.AndCondition]::new($typeCondition, $idCondition))
         }
-        foreach ($name in @(
-            (CodePoints @(0xC8FC,0xC18C)) + ' ' + (CodePoints @(0xD45C,0xC2DC,0xC904)) + ' ' + (CodePoints @(0xBC0F)) + ' ' + (CodePoints @(0xAC80,0xC0C9)) + ' ' + (CodePoints @(0xCC3D)),
-            (CodePoints @(0xC8FC,0xC18C)) + ' ' + (CodePoints @(0xBC0F)) + ' ' + (CodePoints @(0xAC80,0xC0C9)) + ' ' + (CodePoints @(0xCC3D)),
-            (CodePoints @(0xAC80,0xC0C9)) + ' ' + (CodePoints @(0xB610,0xB294)) + ' ' + (CodePoints @(0xC6F9)) + ' ' + (CodePoints @(0xC8FC,0xC18C)) + ' ' + (CodePoints @(0xC785,0xB825)),
-            (CodePoints @(0xC8FC,0xC18C)) + ' ' + (CodePoints @(0xD45C,0xC2DC,0xC904)),
-            'Address and search bar', 'Search or enter web address', 'Address bar'
-        )) {
+        foreach ($name in $script:BrowserProfile.addressNames) {
             $nameCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, $name)
             $typeCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit)
             $addressConditions.Add([System.Windows.Automation.AndCondition]::new($typeCondition, $nameCondition))
@@ -654,10 +704,18 @@ function Get-RealWindows {
                 $value = $null
                 $valuePattern = $null
                 if ($element.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$valuePattern)) { $value = [string]$valuePattern.Current.Value }
-                [pscustomobject]@{
+                $address = [pscustomobject]@{
                     automationId = $element.Current.AutomationId; name = $element.Current.Name; className = $element.Current.ClassName; controlType = 'Edit'
                     isPassword = $false; isOffscreen = $false; value = $value; legacyValue = (Read-LegacyValue -Element $element)
                 }
+                if ($script:BrowserProfile.originSource -ceq 'top-level-document') {
+                    $addressParent = [System.Windows.Automation.TreeWalker]::RawViewWalker.GetParent($element)
+                    $address | Add-Member NoteProperty processId $element.Current.ProcessId
+                    $address | Add-Member NoteProperty parentClassName $addressParent.Current.ClassName
+                    $address | Add-Member NoteProperty parentControlType ($addressParent.Current.ControlType.ProgrammaticName -replace '^ControlType\.', '')
+                    $address | Add-Member NoteProperty parentProcessId $addressParent.Current.ProcessId
+                }
+                $address
             }
         )
         $documentCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Document)
@@ -665,7 +723,32 @@ function Get-RealWindows {
         $normalizedDocuments = @(
             foreach ($element in $documents) {
                 if ($element.Current.IsPassword -or $element.Current.IsOffscreen) { continue }
-                [pscustomobject]@{ controlType = 'Document'; isPassword = $false; isOffscreen = $false; legacyValue = (Read-LegacyValue -Element $element) }
+                if ($script:BrowserProfile.originSource -ceq 'top-level-document') {
+                    $parents = @()
+                    $parent = $element
+                    foreach ($class in @($script:BrowserProfile.documentRoot.parentClasses)) {
+                        $parent = [System.Windows.Automation.TreeWalker]::RawViewWalker.GetParent($parent)
+                        if ($null -eq $parent) { break }
+                        $parents += [pscustomobject]@{
+                            className = $parent.Current.ClassName; controlType = $parent.Current.ControlType.ProgrammaticName -replace '^ControlType\.', ''
+                            processId = $parent.Current.ProcessId; nativeWindowHandle = $parent.Current.NativeWindowHandle
+                        }
+                    }
+                    $document = [pscustomobject]@{
+                        controlType = 'Document'; isPassword = $false; isOffscreen = $false
+                        automationId = $element.Current.AutomationId; className = $element.Current.ClassName
+                        processId = $element.Current.ProcessId; parents = $parents; value = $null
+                    }
+                    # No LegacyIAccessible workaround: read the standard ValuePattern
+                    # only on a structurally verified top-level tab document.
+                    if (Test-TopLevelBrowserDocument -Document $document -OwnerPid $handle.pid) {
+                        $valuePattern = $null
+                        if ($element.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$valuePattern)) { $document.value = [string]$valuePattern.Current.Value }
+                    }
+                    $document
+                } else {
+                    [pscustomobject]@{ controlType = 'Document'; isPassword = $false; isOffscreen = $false; legacyValue = (Read-LegacyValue -Element $element) }
+                }
             }
         )
 
@@ -746,7 +829,7 @@ function Get-RealWindows {
         $tabCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::TabItem)
         $systemTokens = [ordered]@{ portal = $labels.portal; neis = $labels.neis; edufine = $labels.edufine }
         foreach ($element in $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $tabCondition)) {
-            if ($element.Current.ProcessId -ne $handle.pid -or $element.Current.ClassName -cne 'EdgeTab' -or $element.Current.AutomationId -cne 'view_24') { continue }
+            if ($element.Current.ProcessId -ne $handle.pid -or (-not (Test-BrowserTab -ClassName $element.Current.ClassName -AutomationId $element.Current.AutomationId))) { continue }
             $selection = $null
             if (-not $element.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$selection)) { continue }
             if ($selection.Current.IsSelected) { $originalSelectedTab = $element }
@@ -754,13 +837,13 @@ function Get-RealWindows {
             if ($matchedSystems.Count -ne 1) { continue }
             $rectangle = $element.Current.BoundingRectangle
             $systemTabs += [pscustomobject]@{
-                element = $element; system = $matchedSystems[0]; role = 'TabItem'; className = 'EdgeTab'; automationId = 'view_24'
+                element = $element; system = $matchedSystems[0]; role = 'TabItem'; className = $element.Current.ClassName; automationId = $element.Current.AutomationId
                 visible = (-not $element.Current.IsOffscreen -and $rectangle.Width -gt 0 -and $rectangle.Height -gt 0)
                 enabled = $element.Current.IsEnabled; selectionAvailable = $true; selected = $selection.Current.IsSelected; processId = $element.Current.ProcessId
             }
         }
         $windows.Add([pscustomobject]@{
-            pid = $handle.pid; hwnd = [string]$handle.hwnd; processName = 'msedge'
+            pid = $handle.pid; hwnd = [string]$handle.hwnd; processName = $script:BrowserProfile.processName
             processStartedAt = $process.StartTime.ToUniversalTime().ToString('o')
             visible = $true; rootAvailable = $true; rootProcessId = $root.Current.ProcessId
             addressControls = $normalizedAddresses; documents = $normalizedDocuments; controls = $controls
@@ -802,6 +885,7 @@ function Test-ValidRequest {
 try {
     $requestText = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($RequestBase64))
     $request = $requestText | ConvertFrom-Json -ErrorAction Stop
+    Set-BrowserProfile -Id $request.browser
     if ($null -ne $secretBase64) {
         try { $script:CertificateSecret = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($secretBase64)) } catch { $script:CertificateSecret = $null }
         $secretBase64 = $null
@@ -830,7 +914,7 @@ try {
         $windows = @(Get-RealWindows)
     }
     $eligibleWindows = @($windows | Where-Object {
-        $_.processName -ceq 'msedge' -and $_.visible -eq $true -and $_.rootAvailable -eq $true -and [int]$_.rootProcessId -eq [int]$_.pid
+        $_.processName -ieq $script:BrowserProfile.processName -and $_.visible -eq $true -and $_.rootAvailable -eq $true -and [int]$_.rootProcessId -eq [int]$_.pid
     })
     if ($null -ne $request.target) {
         $eligibleWindows = @($eligibleWindows | Where-Object {
@@ -926,7 +1010,7 @@ try {
         # never required: the user working in another window must not break the task.
         # bringForward: the teacher has to type into this window now (certificate password), so it
         # is raised even while they are in another program.
-        if ($request.bringForward -eq $true -or -not [OrdinaryEdgeNativeV1]::UserElsewhere()) { $null = [OrdinaryEdgeNativeV1]::Activate($targetHandle) }
+        if ($request.bringForward -eq $true -or -not [OrdinaryEdgeNativeV1]::UserElsewhere($script:BrowserProfile.processName)) { $null = [OrdinaryEdgeNativeV1]::Activate($targetHandle) }
         # Switching an Edge tab is asynchronous: the address bar still reported the previous
         # tab's page when it was read once, 150 ms after the click, and a perfectly good switch
         # came back 'unavailable'. Give the browser a moment, re-reading until it agrees.

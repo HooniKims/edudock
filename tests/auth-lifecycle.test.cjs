@@ -171,7 +171,9 @@ test('product wiring uses ordinary Edge handoff without an automation profile or
   const portal = fs.readFileSync('src/portal.cjs', 'utf8');
   assert.doesNotMatch(main, /EdgeProfile|launchPersistentContext|--remote-debugging/);
   assert.doesNotMatch(portal, /launchPersistentContext|--user-data-dir|--remote-debugging/);
-  assert.match(main + portal, /microsoft-edge:\$\{activeOrigins\(\)\.portal\}/);
+  assert.match(portal, /this\.openPortal\(activeOrigins\(\)\.portal, operation/);
+  assert.match(main, /openBrowserUrl\(url,/);
+  assert.equal(require('../src/browsers.cjs').browserProfile('edge').protocol, 'microsoft-edge:');
 });
 
 test('diagnostics never scans certificate store paths or private-key locations', () => {

@@ -18,6 +18,7 @@ test('Electron main wiring drives authentication transition and resumes through 
   assert.equal(report.observable.draftCarried.drafted, true);
   assert.equal(report.observable.draftCarried.wroteIntoExistingEditor, false);
   assert.equal(report.observable.browserProcessesLaunched, 0);
+  assert.deepEqual(report.observable.browserChoices, ['aside', 'chrome', 'edge']);
   assert.equal(report.cleanup.ownedProfileRemoved, true);
   assert.equal(report.cleanup.ordinaryEdgeUntouched, true);
 });

@@ -3,7 +3,7 @@
 const api = window.portal;
 const all = selector => [...document.querySelectorAll(selector)];
 let busy = false;
-let currentStatus = { phase: 'idle', message: '업무를 선택하면 Edge에서 이어집니다.', busy: false };
+let currentStatus = { phase: 'idle', message: '업무를 선택하면 브라우저에서 이어집니다.', busy: false };
 
 function applyButtonOrder(settings) {
   if (!Array.isArray(settings?.buttons)) return;

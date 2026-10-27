@@ -79,7 +79,7 @@ test('native bridge uses hidden shell-free PowerShell with one compact JSON requ
   assert.deepEqual(calls[0].args, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 'C:\\app\\ordinary-edge.ps1']);
   assert.equal(calls[0].options.shell, false);
   assert.equal(calls[0].options.windowsHide, true);
-  assert.equal(calls[0].value, '{"command":"inspect","region":"sen"}');
+  assert.equal(calls[0].value, '{"command":"inspect","region":"sen","browser":"edge"}');
 });
 
 test('native bridge rejects malformed and misleading success output', async () => {
@@ -151,7 +151,7 @@ test('adapter inspects before opening and accepts only one exact trusted authent
   const responses = [reply([windowState({ authenticated: true, actions: ['portal'] })])];
   const adapter = new OrdinaryEdgeAdapter({ runNative: async request => { requests.push(request); return responses.shift(); }, openExternal: async url => opened.push(url) });
   const op = operation();
-  await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', op);
+  await adapter.openOfficialPortal('https://sen.eduptl.kr', op);
   assert.deepEqual(requests, [{ command: 'inspect', restoreMinimised: true }]);
   assert.deepEqual(opened, []);
   assert.equal(await adapter.observeAuthenticated(op), true);
@@ -314,7 +314,7 @@ test('existing NEIS landing is reused without opening a duplicate URL and is rev
   const responses = [reply([neis]), reply([neis]), reply([neis], { invoked: true }), reply([neis])];
   const adapter = new OrdinaryEdgeAdapter({ runNative: async request => { requests.push(request); return responses.shift(); }, openExternal: async url => opened.push(url), pause: async () => {} });
   const op = { ...operation(), action: 'neis' };
-  await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', op);
+  await adapter.openOfficialPortal('https://sen.eduptl.kr', op);
   assert.deepEqual(opened, []);
   assert.equal(await adapter.observeAuthenticated(op), true);
   assert.deepEqual(await adapter.resumeAction('neis', op), { verified: true, system: 'neis', deepActionUnsupported: false });
@@ -328,7 +328,7 @@ test('K-EdYouFine activation reuses the existing Edge tab set and waits for exac
   const responses = [reply([neis]), reply([neis]), reply([edufine], { invoked: true }), reply([edufine])];
   const adapter = new OrdinaryEdgeAdapter({ runNative: async request => { requests.push(request); return responses.shift(); }, openExternal: async () => { throw new Error('must not open'); }, pause: async () => {} });
   const op = { ...operation(), action: 'edufine' };
-  await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', op);
+  await adapter.openOfficialPortal('https://sen.eduptl.kr', op);
   assert.equal(await adapter.observeAuthenticated(op), true);
   assert.deepEqual(await adapter.resumeAction('edufine', op), { verified: true, system: 'edufine', deepActionUnsupported: false });
   assert.equal(requests.filter(request => request.command === 'invoke').length, 1);
@@ -342,7 +342,7 @@ test('verified K-EdYouFine landing can switch back to NEIS without reopening log
   const responses = [reply([edufine]), reply([edufine]), reply([neis], { invoked: true }), reply([neis])];
   const adapter = new OrdinaryEdgeAdapter({ runNative: async request => { requests.push(request); return responses.shift(); }, openExternal: async url => opened.push(url), pause: async () => {} });
   const op = { ...operation(), action: 'neis' };
-  await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', op);
+  await adapter.openOfficialPortal('https://sen.eduptl.kr', op);
   assert.deepEqual(opened, []);
   assert.equal(await adapter.observeAuthenticated(op), true);
   assert.deepEqual(await adapter.resumeAction('neis', op), { verified: true, system: 'neis', deepActionUnsupported: false });
@@ -355,7 +355,7 @@ test('attendance navigation prefers an existing task tab and completes only on e
   const responses = [reply([neis]), reply([neis]), reply([neis], { invoked: true }), reply([neis]), reply([neis], { invoked: true }), reply([active])];
   const adapter = new OrdinaryEdgeAdapter({ runNative: async request => { requests.push(request); return responses.shift(); }, openExternal: async () => {}, pause: async () => {} });
   const op = { ...operation(), action: 'attendance' };
-  await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', op);
+  await adapter.openOfficialPortal('https://sen.eduptl.kr', op);
   assert.equal(await adapter.observeAuthenticated(op), true);
   assert.deepEqual(await adapter.resumeAction('attendance', op), { verified: true, system: 'neis', activeTask: 'attendance' });
   assert.deepEqual(requests.filter(request => request.command === 'invoke').map(request => request.action), ['activate-system-tab', 'select-attendance-tab']);
@@ -374,7 +374,7 @@ test('trip navigation performs one deterministic state step per reinspection', a
   for (let index = 0; index < 3; index += 1) responses.push(reply([states[index]], { invoked: true }), reply([states[index + 1]]));
   const adapter = new OrdinaryEdgeAdapter({ runNative: async request => { requests.push(request); return responses.shift(); }, openExternal: async () => {}, pause: async () => {} });
   const op = { ...operation(), action: 'trip' };
-  await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', op);
+  await adapter.openOfficialPortal('https://sen.eduptl.kr', op);
   assert.equal(await adapter.observeAuthenticated(op), true);
   assert.deepEqual(await adapter.resumeAction('trip', op), { verified: true, system: 'neis', activeTask: 'trip' });
   assert.deepEqual(requests.filter(request => request.command === 'invoke').map(request => request.action), ['activate-system-tab', 'select-my-menu', 'expand-duty', 'open-trip']);
@@ -386,7 +386,7 @@ test('unavailable or repeated NEIS task state fails without a repeated click loo
   const responses = [reply([stuck]), reply([stuck]), reply([stuck], { invoked: true }), reply([stuck]), reply([stuck], { invoked: true }), reply([stuck])];
   const adapter = new OrdinaryEdgeAdapter({ runNative: async request => { requests.push(request); return responses.shift(); }, openExternal: async () => {}, pause: async () => {} });
   const op = { ...operation(), action: 'attendance' };
-  await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', op);
+  await adapter.openOfficialPortal('https://sen.eduptl.kr', op);
   assert.equal(await adapter.observeAuthenticated(op), true);
   await assert.rejects(adapter.resumeAction('attendance', op), error => error.reason === 'task-stalled');
   assert.equal(requests.filter(request => request.action === 'select-my-menu').length, 1);
@@ -400,7 +400,7 @@ test('cancellation during NEIS task reinspection prevents late completion', asyn
   const responses = [reply([ready]), reply([ready]), reply([ready], { invoked: true }), reply([ready]), reply([ready], { invoked: true })];
   const adapter = new OrdinaryEdgeAdapter({ runNative: () => responses.length ? Promise.resolve(responses.shift()) : delayed, openExternal: async () => {}, pause: async () => {} });
   const op = { ...operation(), action: 'trip' };
-  await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', op);
+  await adapter.openOfficialPortal('https://sen.eduptl.kr', op);
   assert.equal(await adapter.observeAuthenticated(op), true);
   const pending = adapter.resumeAction('trip', op);
   await new Promise(resolve => setImmediate(resolve));
@@ -414,7 +414,7 @@ test('NEIS task navigation has one bounded deadline', async () => {
   const responses = [reply([ready]), reply([ready]), reply([ready], { invoked: true }), reply([ready]), reply([ready], { invoked: true }), reply([ready])];
   const adapter = new OrdinaryEdgeAdapter({ runNative: async () => responses.shift(), openExternal: async () => {}, landingTimeoutMs: 1, now: () => clock, pause: async () => { clock += 2; } });
   const op = { ...operation(), action: 'attendance' };
-  await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', op);
+  await adapter.openOfficialPortal('https://sen.eduptl.kr', op);
   assert.equal(await adapter.observeAuthenticated(op), true);
   await assert.rejects(adapter.resumeAction('attendance', op), error => error.reason === 'task-timeout');
 });
@@ -435,7 +435,7 @@ test('draft opens the coordinator exactly once only after verified K-EdYouFine l
   } });
   const adapter = new OrdinaryEdgeAdapter({ runNative: async () => responses.shift(), openExternal: async () => {}, pause: async () => {}, draftHandoff });
   const op = { ...operation(), action: 'draft' };
-  await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', op);
+  await adapter.openOfficialPortal('https://sen.eduptl.kr', op);
   assert.equal(await adapter.observeAuthenticated(op), true);
   // The fake helper never reports the new window as raised, so the result says it stayed behind.
   assert.deepEqual(await adapter.resumeAction('draft', op), { verified: true, system: 'edufine', editorReused: false, drafted: false, raised: false });
@@ -453,7 +453,7 @@ test('a generated draft is written into a form the product just opened, and only
     const responses = [reply([neis]), reply([neis]), reply([edufine], { invoked: true }), reply([edufine])];
     const adapter = new OrdinaryEdgeAdapter({ runNative: async () => responses.shift(), openExternal: async () => {}, pause: async () => {}, draftHandoff: handoff });
     const op = { ...operation(), action: 'draft' };
-    await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', op);
+    await adapter.openOfficialPortal('https://sen.eduptl.kr', op);
     assert.equal(await adapter.observeAuthenticated(op), true);
     return adapter.resumeAction('draft', op, options);
   }
@@ -511,7 +511,7 @@ test('cancellation while landing verification prevents a late success', async ()
     pause: async () => {},
   });
   const op = { ...operation(), action: 'neis' };
-  await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', op);
+  await adapter.openOfficialPortal('https://sen.eduptl.kr', op);
   assert.equal(await adapter.observeAuthenticated(op), true);
   const pending = adapter.resumeAction('neis', op);
   await new Promise(resolve => setImmediate(resolve));
@@ -638,7 +638,7 @@ test('pressing a business button while logged out clicks the official login exac
     openExternal: async () => {}, pause: async () => {},
   });
   const op = { ...operation(), action: 'neis' };
-  await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', op);
+  await adapter.openOfficialPortal('https://sen.eduptl.kr', op);
   assert.equal(await adapter.observeAuthenticated(op), false);
   assert.deepEqual(requests.filter(r => r.command === 'invoke').map(r => r.action), ['login']);
   assert.equal(await adapter.observeAuthenticated(op), false);
@@ -683,7 +683,7 @@ test('the served bridge reuses one helper process across calls and frames one re
   assert.equal(spawns[0].writes.length, 4);
   for (const write of spawns[0].writes) {
     assert.ok(write.endsWith('\n'), 'each request is one line');
-    assert.equal(Buffer.from(write.trim(), 'base64').toString('utf8'), '{"command":"inspect","region":"sen"}');
+    assert.equal(Buffer.from(write.trim(), 'base64').toString('utf8'), '{"command":"inspect","region":"sen","browser":"edge"}');
   }
 });
 
@@ -696,7 +696,7 @@ test('the certificate password travels outside the JSON, after a dot, in both th
   assert.equal(extra, undefined);
   const decoded = Buffer.from(json, 'base64').toString('utf8');
   assert.equal(decoded.includes('pa55'), false, 'the JSON part never holds the password');
-  assert.deepEqual(JSON.parse(decoded), { command: 'invoke', region: 'sen', target: request.target, action: 'submit-certificate-password' });
+  assert.deepEqual(JSON.parse(decoded), { command: 'invoke', region: 'sen', browser: 'edge', target: request.target, action: 'submit-certificate-password' });
   assert.equal(Buffer.from(secret, 'base64').toString('utf8'), 'pa55wörd!');
 
   let ended = null;
@@ -854,7 +854,7 @@ test('already logged in: a portal tab elsewhere in Edge is switched to, never a 
   ];
   const adapter = new OrdinaryEdgeAdapter({ runNative: async request => { requests.push(request); return responses.shift(); }, openExternal: async url => opened.push(url), pause: async () => {} });
   const op = { ...operation(), action: 'neis' };
-  const result = await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', op);
+  const result = await adapter.openOfficialPortal('https://sen.eduptl.kr', op);
   assert.deepEqual(result, { opened: false, activatedTab: true });
   assert.deepEqual(opened, [], 'no new tab while a portal tab exists');
   assert.deepEqual(requests[2], { command: 'invoke', target, action: 'activate-system-tab', system: 'portal', requireLanding: false });
@@ -867,8 +867,8 @@ test('with no portal tab anywhere the portal is opened afresh, as before', async
   const foreign = { ...windowState(), origin: null, landing: null, availableSystems: [] };
   const responses = [{ status: 'unavailable', windows: [foreign] }, { status: 'unavailable', windows: [foreign] }];
   const adapter = new OrdinaryEdgeAdapter({ runNative: async () => responses.shift(), openExternal: async url => opened.push(url), pause: async () => {} });
-  assert.deepEqual(await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', { ...operation(), action: 'neis' }), { opened: true });
-  assert.deepEqual(opened, ['microsoft-edge:https://sen.eduptl.kr']);
+  assert.deepEqual(await adapter.openOfficialPortal('https://sen.eduptl.kr', { ...operation(), action: 'neis' }), { opened: true });
+  assert.deepEqual(opened, ['https://sen.eduptl.kr']);
 });
 
 test('a portal session notice is acknowledged once and the login that follows runs on the same tab', async () => {
@@ -903,7 +903,7 @@ test('K-EdYouFine 사용시간 종료 during arrival is acknowledged and the lan
   const responses = [reply([neis]), reply([neis]), reply([ended], { invoked: true }), reply([ended]), reply([ended], { invoked: true }), reply([main])];
   const adapter = new OrdinaryEdgeAdapter({ runNative: async request => { requests.push(request); return responses.shift(); }, openExternal: async () => {}, pause: async () => {} });
   const op = { ...operation(), action: 'edufine' };
-  await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', op);
+  await adapter.openOfficialPortal('https://sen.eduptl.kr', op);
   assert.equal(await adapter.observeAuthenticated(op), true);
   assert.deepEqual(await adapter.resumeAction('edufine', op), { verified: true, system: 'edufine', deepActionUnsupported: false });
   assert.deepEqual(requests.filter(request => request.command === 'invoke').map(request => request.action), ['activate-system-tab', 'dismiss-session-notice']);
@@ -923,7 +923,7 @@ test('a teacher already working inside K-EdYouFine counts as logged in, and the 
   const responses = [reply([deep]), reply([deep]), reply([deep], { invoked: true }), reply([deep])];
   const adapter = new OrdinaryEdgeAdapter({ runNative: async request => { requests.push(request); return responses.length > 1 ? responses.shift() : responses[0]; }, openExternal: async () => { throw new Error('must not open'); }, pause: async () => {}, draftHandoff });
   const op = { ...operation(), action: 'draft' };
-  await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', op);
+  await adapter.openOfficialPortal('https://sen.eduptl.kr', op);
   assert.equal(await adapter.observeAuthenticated(op), true, 'inside K-에듀파인 is proof of login');
   // The fake helper never reports the new window as raised, so the result says it stayed behind.
   assert.deepEqual(await adapter.resumeAction('draft', op), { verified: true, system: 'edufine', editorReused: false, drafted: false, raised: false });
@@ -961,7 +961,7 @@ test('a K-EdYouFine tab launched just now waits for its front page before the dr
   const responses = [reply([portal]), reply([portal]), reply([portal], { invoked: true }), reply([loading]), reply([loading], { invoked: true }), reply([loading]), reply([loading]), reply([main])];
   const adapter = new OrdinaryEdgeAdapter({ runNative: async request => { requests.push(request); if (request.action === 'edufine') clicks += 1; return responses.shift(); }, openExternal: async () => {}, pause: async () => {}, draftHandoff });
   const op = { ...operation(), action: 'draft' };
-  await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', op);
+  await adapter.openOfficialPortal('https://sen.eduptl.kr', op);
   assert.equal(await adapter.observeAuthenticated(op), true);
   const result = await adapter.resumeAction('draft', op);
   assert.equal(result.verified, true);
@@ -988,7 +988,7 @@ test('pressing K-EdYouFine while already inside it counts as arrival', async () 
   const responses = [reply([inside]), reply([inside]), reply([inside], { invoked: true }), reply([inside])];
   const adapter = new OrdinaryEdgeAdapter({ runNative: async request => { requests.push(request); return responses.shift(); }, openExternal: async () => { throw new Error('must not open'); }, pause: async () => {} });
   const op = { ...operation(), action: 'edufine' };
-  await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', op);
+  await adapter.openOfficialPortal('https://sen.eduptl.kr', op);
   assert.equal(await adapter.observeAuthenticated(op), true);
   assert.deepEqual(await adapter.resumeAction('edufine', op), { verified: true, system: 'edufine', deepActionUnsupported: false });
 });
@@ -999,7 +999,7 @@ test('개인근무상황 and 출장 still demand the real NEIS front page', asyn
   let clock = 0;
   const adapter = new OrdinaryEdgeAdapter({ runNative: async () => reply([inside], { invoked: true }), openExternal: async () => {}, pause: async () => { clock += 2000; }, now: () => clock, landingTimeoutMs: 6000 });
   const op = { ...operation(), action: 'attendance' };
-  await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', op);
+  await adapter.openOfficialPortal('https://sen.eduptl.kr', op);
   assert.equal(await adapter.observeAuthenticated(op), true);
   await assert.rejects(adapter.resumeAction('attendance', op), error => error.reason === 'landing-unverified');
 });
@@ -1034,7 +1034,7 @@ test('with K-EdYouFine on screen, pressing 나이스 switches tabs instead of de
   const responses = [reply([showingEdufine]), reply([showingEdufine]), reply([neisArrived], { invoked: true }), reply([neisArrived])];
   const adapter = new OrdinaryEdgeAdapter({ runNative: async request => { requests.push(request); return responses.length > 1 ? responses.shift() : responses[0]; }, openExternal: async () => { throw new Error('must not open a new tab'); }, pause: async () => {} });
   const op = { ...operation(), action: 'neis' };
-  await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', op);
+  await adapter.openOfficialPortal('https://sen.eduptl.kr', op);
   assert.equal(await adapter.observeAuthenticated(op), true);
   assert.deepEqual(await adapter.resumeAction('neis', op), { verified: true, system: 'neis', deepActionUnsupported: false });
   assert.deepEqual(requests.filter(request => request.command === 'invoke').map(request => request.action), ['activate-system-tab']);
@@ -1055,7 +1055,7 @@ test('a press asks for a minimised browser to be brought back, instead of openin
   const portal = windowState({ authenticated: true, actions: ['portal', 'neis'], availableSystems: ['portal', 'neis'] });
   const adapter = new OrdinaryEdgeAdapter({ runNative: async request => { requests.push(request); return reply([portal]); }, openExternal: async () => { throw new Error('must not open a new tab'); }, pause: async () => {} });
   const op = { ...operation(), action: 'neis' };
-  assert.deepEqual(await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', op), { opened: false });
+  assert.deepEqual(await adapter.openOfficialPortal('https://sen.eduptl.kr', op), { opened: false });
   assert.equal(requests[0].restoreMinimised, true, 'the discovery pass asks for it');
 });
 
@@ -1064,7 +1064,7 @@ test('only a discovery pass asks for the restore, never the polling that follows
   const portal = windowState({ authenticated: true, actions: ['portal'] });
   const adapter = new OrdinaryEdgeAdapter({ runNative: async request => { requests.push(request); return reply([portal]); }, openExternal: async () => {}, pause: async () => {} });
   const op = { ...operation(), action: 'portal' };
-  await adapter.openOfficialPortal('microsoft-edge:https://sen.eduptl.kr', op);
+  await adapter.openOfficialPortal('https://sen.eduptl.kr', op);
   // The first observation reuses the window discovery already found; the next one re-reads it
   // by target, and those targeted polls are the ones that must not carry the flag.
   await adapter.observeAuthenticated(op);

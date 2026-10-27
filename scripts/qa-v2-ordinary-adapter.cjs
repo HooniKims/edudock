@@ -99,6 +99,22 @@ const relative = file => path.relative(root, file).replaceAll('\\', '/');
     assert.equal(fills[0].request.target, '9755|2026-09-20T13:02:00.0000000Z|8644', 'only the window opened by this operation is written into');
     report.observable.draftCarried = { ok: carried.ok, drafted: carried.drafted, fillTarget: fills[0].request.target, wroteIntoExistingEditor: false };
 
+    const settingsWindow = app.waitForEvent('window');
+    await page.evaluate(() => window.portal.openAuxiliary('settings'));
+    const settingsPage = await settingsWindow;
+    const browserSelect = settingsPage.locator('#browser-select');
+    await browserSelect.waitFor({ state: 'visible' });
+    assert.deepEqual(await browserSelect.locator('option').evaluateAll(options => options.map(option => option.value)), ['aside', 'edge', 'chrome']);
+    assert.equal(await browserSelect.inputValue(), 'edge');
+    const browserChoices = [];
+    for (const browser of ['aside', 'chrome', 'edge']) {
+      await browserSelect.selectOption(browser);
+      await settingsPage.waitForFunction(id => window.portal.getState().then(state => state.settings.browser === id), browser);
+      assert.equal(JSON.parse(fs.readFileSync(path.join(profile, 'settings.json'), 'utf8')).browser, browser);
+      browserChoices.push(browser);
+    }
+    report.observable.browserChoices = browserChoices;
+
     report.artifacts = { nativeRequests: relative(nativeLog), report: relative(reportPath) };
     report.pass = true;
   } finally {

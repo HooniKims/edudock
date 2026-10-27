@@ -330,7 +330,7 @@ test('the draft handoff reuses one helper process instead of spawning per poll',
   assert.equal(spawns.length, 1, 'polling must not start a process per request');
   assert.deepEqual(spawns[0].args, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', 's.ps1', '-Helper', 'h.ps1']);
   assert.equal(spawns[0].writes.length, 5);
-  assert.equal(Buffer.from(spawns[0].writes[0].trim(), 'base64').toString('utf8'), '{"command":"inspect-editors"}');
+  assert.equal(Buffer.from(spawns[0].writes[0].trim(), 'base64').toString('utf8'), '{"command":"inspect-editors","browser":"edge"}');
   bridge.stopWorker();
 });
 

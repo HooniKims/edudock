@@ -1,0 +1,36 @@
+[
+  {
+    "id": "aside", "label": "Aside", "processName": "Aside", "executable": "Aside.exe",
+    "relativePath": ["Aside", "Application", "Aside.exe"],
+    "registryClient": "Aside",
+    "tabClass": "TabView", "tabId": "",
+    "addressClass": "OmniboxViewViews", "addressIds": ["view_1012"],
+    "addressNames": ["주소창 및 검색창"],
+    "originSource": "top-level-document",
+    "documentRoot": {
+      "automationId": "RootWebArea", "className": "",
+      "parentClasses": ["Chrome_RenderWidgetHostHWND", "Chrome_WidgetWin_1", "MultiContentsView", "BrowserView"]
+    }
+  },
+  {
+    "id": "edge", "label": "Microsoft Edge", "processName": "msedge", "executable": "msedge.exe",
+    "relativePath": ["Microsoft", "Edge", "Application", "msedge.exe"],
+    "registryClient": "Microsoft Edge", "protocol": "microsoft-edge:",
+    "tabClass": "EdgeTab", "tabId": "view_24",
+    "addressClass": "OmniboxViewViews", "addressIds": ["view_1021", "view_1017", "addressEditBox"],
+    "addressNames": ["주소 표시줄 및 검색 창", "주소 및 검색 창", "검색 또는 웹 주소 입력", "주소 표시줄", "Address and search bar", "Search or enter web address", "Address bar"]
+  },
+  {
+    "id": "chrome", "label": "Chrome", "processName": "chrome", "executable": "chrome.exe",
+    "relativePath": ["Google", "Chrome", "Application", "chrome.exe"],
+    "registryClient": "Google Chrome",
+    "tabClass": "TabView", "tabId": "",
+    "addressClass": "OmniboxViewViews", "addressIds": ["view_1012"],
+    "addressNames": ["주소창 및 검색창"],
+    "originSource": "top-level-document",
+    "documentRoot": {
+      "automationId": "RootWebArea", "className": "",
+      "parentClasses": ["Chrome_RenderWidgetHostHWND", "Chrome_WidgetWin_1", "MultiContentsView", "BrowserView"]
+    }
+  }
+]

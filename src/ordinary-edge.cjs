@@ -1,6 +1,7 @@
 'use strict';
 
 const path = require('node:path');
+const { browserProfile } = require('./browsers.cjs');
 const { spawn: spawnProcess } = require('node:child_process');
 const { AuthenticationCancelledError } = require('./auth.cjs');
 const { NativeHelperWorker, encodeRequestLine } = require('./native-worker.cjs');
@@ -42,7 +43,7 @@ function validateRequest(request) {
   if (request.target !== undefined && !validTarget(request.target)) throw new TypeError('Invalid native ordinary Edge target.');
   if (request.command === 'invoke' && (!validTarget(request.target) || !ACTIONS.has(request.action))) throw new TypeError('Invalid native ordinary Edge invocation.');
   // The helper derives the same three hosts from this code; it trusts no other office's pages.
-  const result = { command: request.command, region: activeRegion() };
+  const result = { command: request.command, region: activeRegion(), browser: browserProfile().id };
   // Only a discovery pass that a button press just started asks for this: it brings a
   // minimised browser back on screen (without focus) so the existing window is found instead
   // of a new tab being opened on top of it.
@@ -108,8 +109,8 @@ function validNeisTaskState(value) {
 }
 
 function validateResponse(value) {
-  if (!value || !STATUSES.has(value.status) || !Array.isArray(value.windows) || !value.windows.every(validWindow)) throw needsUser('invalid-response', 'Edge 화면 상태를 읽지 못했습니다. 다시 시도해 주세요.');
-  if (value.invoked !== undefined && typeof value.invoked !== 'boolean') throw needsUser('invalid-response', 'Edge 화면 상태를 읽지 못했습니다. 다시 시도해 주세요.');
+  if (!value || !STATUSES.has(value.status) || !Array.isArray(value.windows) || !value.windows.every(validWindow)) throw needsUser('invalid-response', '브라우저 화면 상태를 읽지 못했습니다. 다시 시도해 주세요.');
+  if (value.invoked !== undefined && typeof value.invoked !== 'boolean') throw needsUser('invalid-response', '브라우저 화면 상태를 읽지 못했습니다. 다시 시도해 주세요.');
   return value;
 }
 
@@ -128,8 +129,8 @@ class NativeOrdinaryEdgeBridge {
         spawn,
         timeoutMs,
         errors: {
-          timeout: () => needsUser('helper-timeout', 'Edge 화면 상태를 확인하는 데 시간이 너무 오래 걸렸습니다. 다시 시도해 주세요.'),
-          failed: () => needsUser('helper-failed', 'Edge 화면 상태를 확인하지 못했습니다. 다시 시도해 주세요.'),
+          timeout: () => needsUser('helper-timeout', '브라우저 화면 상태를 확인하는 데 시간이 너무 오래 걸렸습니다. 다시 시도해 주세요.'),
+          failed: () => needsUser('helper-failed', '브라우저 화면 상태를 확인하지 못했습니다. 다시 시도해 주세요.'),
           cancelled: () => new AuthenticationCancelledError(),
         },
       })
@@ -168,28 +169,28 @@ class NativeOrdinaryEdgeBridge {
         finish(error);
         return;
       }
-      timer = setTimeout(() => stop(needsUser('helper-timeout', 'Edge 화면 상태를 확인하는 데 시간이 너무 오래 걸렸습니다. 다시 시도해 주세요.')), this.timeoutMs);
+      timer = setTimeout(() => stop(needsUser('helper-timeout', '브라우저 화면 상태를 확인하는 데 시간이 너무 오래 걸렸습니다. 다시 시도해 주세요.')), this.timeoutMs);
       operation?.cancellation?.then(() => stop(new AuthenticationCancelledError()), () => {});
       child.on('error', error => finish(error));
       child.stdin.on?.('error', error => stop(error));
       child.stdout.on('data', chunk => {
         stdout = Buffer.concat([stdout, Buffer.from(chunk)]);
-        if (stdout.length > MAX_OUTPUT_BYTES) stop(needsUser('invalid-response', 'Edge 화면 상태를 읽지 못했습니다. 다시 시도해 주세요.'));
+        if (stdout.length > MAX_OUTPUT_BYTES) stop(needsUser('invalid-response', '브라우저 화면 상태를 읽지 못했습니다. 다시 시도해 주세요.'));
       });
       child.stderr.on('data', chunk => {
         stderr = Buffer.concat([stderr, Buffer.from(chunk)]);
-        if (stderr.length > MAX_OUTPUT_BYTES) stop(needsUser('helper-failed', 'Edge 화면 상태를 확인하지 못했습니다. 다시 시도해 주세요.'));
+        if (stderr.length > MAX_OUTPUT_BYTES) stop(needsUser('helper-failed', '브라우저 화면 상태를 확인하지 못했습니다. 다시 시도해 주세요.'));
       });
       child.on('close', code => {
         if (settled) return;
         if (operation?.cancelled) return finish(new AuthenticationCancelledError());
-        if (code !== 0) return finish(needsUser('helper-failed', 'Edge 화면 상태를 확인하지 못했습니다. 다시 시도해 주세요.'));
+        if (code !== 0) return finish(needsUser('helper-failed', '브라우저 화면 상태를 확인하지 못했습니다. 다시 시도해 주세요.'));
         try {
           const text = stdout.toString('utf8').trim();
           if (!text) throw new Error('empty');
           finish(null, validateResponse(JSON.parse(text)));
         } catch {
-          finish(needsUser('invalid-response', 'Edge 화면 상태를 읽지 못했습니다. 다시 시도해 주세요.'));
+          finish(needsUser('invalid-response', '브라우저 화면 상태를 읽지 못했습니다. 다시 시도해 주세요.'));
         }
       });
       // A request with the password goes in the same one-line form the served helper reads.
@@ -208,7 +209,7 @@ class NativeOrdinaryEdgeBridge {
           return validateResponse(JSON.parse(line));
         } catch {
           this.workerRunner.stop();
-          throw needsUser('invalid-response', 'Edge 화면 상태를 읽지 못했습니다. 다시 시도해 주세요.');
+          throw needsUser('invalid-response', '브라우저 화면 상태를 읽지 못했습니다. 다시 시도해 주세요.');
         }
       })
       .catch(error => {
@@ -274,13 +275,13 @@ const HELPER_REASON_MESSAGES = {
   'unexpected-form': '열린 기안창이 일반기안문 서식이 아니어서 초안을 넣지 않았습니다.',
   'editor-not-found': '초안을 넣을 기안창을 찾지 못했습니다. 다시 시도해 주세요.',
   'draft-content-empty': '넣을 초안의 제목이나 본문이 비어 있습니다.',
-  'browser-or-menu-unavailable': 'K-에듀파인 화면이 Edge 앞에 보이지 않아 기안 메뉴를 열지 못했습니다. K-에듀파인 탭이 열려 있는지 확인한 뒤 다시 시도해 주세요.',
+  'browser-or-menu-unavailable': 'K-에듀파인 화면이 브라우저 앞에 보이지 않아 기안 메뉴를 열지 못했습니다. K-에듀파인 탭이 열려 있는지 확인한 뒤 다시 시도해 주세요.',
   'menu-not-actionable': 'K-에듀파인 상단 메뉴가 아직 반응하지 않았습니다. 화면이 다 열린 뒤 다시 시도해 주세요.',
   'left-tree-unavailable': 'K-에듀파인 왼쪽 메뉴를 찾지 못했습니다. 문서관리 화면인지 확인한 뒤 다시 시도해 주세요.',
   'menu-path-ambiguous': 'K-에듀파인 왼쪽 메뉴에서 기안 > 공용서식 경로를 확정하지 못했습니다. 화면을 확인한 뒤 다시 시도해 주세요.',
   'exact-form-not-actionable': '공용서식 목록에서 일반기안문 서식을 눌렀지만 반응이 없었습니다. 다시 시도해 주세요.',
   'ocr-point-not-actionable': '공용서식 목록에서 일반기안문 서식을 눌렀지만 반응이 없었습니다. 다시 시도해 주세요.',
-  'verified-window-capture-unavailable': 'K-에듀파인 화면을 읽지 못했습니다. Edge 창이 화면에 보이는지 확인한 뒤 다시 시도해 주세요.',
+  'verified-window-capture-unavailable': 'K-에듀파인 화면을 읽지 못했습니다. 브라우저 창이 화면에 보이는지 확인한 뒤 다시 시도해 주세요.',
   'korean-ocr-unavailable': '이 PC에 한국어 화면 인식 기능이 없어 공용서식 목록을 읽지 못했습니다. Windows 언어 설정에서 한국어 광학 문자 인식을 설치해 주세요.',
 };
 
@@ -354,7 +355,7 @@ class OrdinaryEdgeAdapter {
     if (candidates.length > 1) {
       // The portal itself opens extra windows, so prefer the one in front rather than refusing.
       const focused = candidates.filter(window => window.foreground === true);
-      if (focused.length !== 1) throw needsUser('ambiguous-window', '업무 화면이 열린 Edge 창이 여러 개여서 어느 창인지 확정할 수 없습니다. 쓰려는 창을 클릭한 뒤 다시 시도해 주세요.');
+      if (focused.length !== 1) throw needsUser('ambiguous-window', '업무 화면이 열린 브라우저 창이 여러 개여서 어느 창인지 확정할 수 없습니다. 쓰려는 창을 클릭한 뒤 다시 시도해 주세요.');
       candidates = focused;
     }
     if (candidates.length !== 1) return null;
@@ -460,7 +461,7 @@ class OrdinaryEdgeAdapter {
     this.assertActive(operation);
     // The helper stopped typing the password because another window or field took the focus.
     if (response.interrupted === true) throw needsUser('password-interrupted', '다른 창이 앞으로 와서 비밀번호 입력을 멈췄어요. 인증서 창에서 직접 입력해 주세요.');
-    if (response.status !== 'ok' || response.invoked !== true) throw needsUser('not-invoked', '열린 Edge 화면에서 요청한 동작을 실행하지 못했습니다. 화면을 확인한 뒤 다시 시도해 주세요.');
+    if (response.status !== 'ok' || response.invoked !== true) throw needsUser('not-invoked', '열린 브라우저 화면에서 요청한 동작을 실행하지 못했습니다. 화면을 확인한 뒤 다시 시도해 주세요.');
     return response;
   }
 
@@ -474,13 +475,13 @@ class OrdinaryEdgeAdapter {
       if (!state.target) {
         // Edge may still be starting, but a flow that never reaches the portal has to end.
         if (state.requestedAt !== null && this.now() - state.requestedAt > this.surfaceMissingMs) {
-          throw needsUser('surface-missing', '업무포털 화면을 열지 못했습니다. Edge가 열렸는지 확인한 뒤 다시 시도해 주세요.');
+          throw needsUser('surface-missing', '업무포털 화면을 열지 못했습니다. 브라우저가 열렸는지 확인한 뒤 다시 시도해 주세요.');
         }
         return false;
       }
       state.lostSince = state.lostSince ?? this.now();
       if (this.now() - state.lostSince < this.surfaceLostMs) return false;
-      throw needsUser('surface-lost', '업무포털 화면을 더 이상 찾을 수 없습니다. Edge 창이 닫혔는지 확인한 뒤 다시 시도해 주세요.');
+      throw needsUser('surface-lost', '업무포털 화면을 더 이상 찾을 수 없습니다. 브라우저 창이 닫혔는지 확인한 뒤 다시 시도해 주세요.');
     }
     state.lostSince = null;
     state.target = targetOf(window);
@@ -596,7 +597,7 @@ class OrdinaryEdgeAdapter {
     const launched = needsLaunch && window.landing === 'portal' && window.authenticated === true && window.actions.includes(system);
     if (launched) window = await this.launchSystem(system, operation, state, window);
     if (!window || (!insideSystem(window, system) && !window.availableSystems.includes(system))) throw needsUser(launched ? 'launch-not-arrived' : 'launch-unavailable', launched
-      ? `${SYSTEM_LABELS[system]} 화면이 열리기를 기다렸지만 도착을 확인하지 못했습니다. 새로 열린 Edge 탭의 오류 메시지를 확인한 뒤 다시 시도해 주세요.`
+      ? `${SYSTEM_LABELS[system]} 화면이 열리기를 기다렸지만 도착을 확인하지 못했습니다. 새로 열린 브라우저 탭의 오류 메시지를 확인한 뒤 다시 시도해 주세요.`
       : `업무포털 화면에서 ${SYSTEM_LABELS[system]} 바로가기를 찾지 못했습니다. 업무포털 메인 화면인지 확인한 뒤 다시 시도해 주세요.`);
     state.window = window;
     if (window.availableSystems.includes(system)) await this.invoke(state, 'activate-system-tab', operation, { system, requireLanding: false });

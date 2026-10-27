@@ -136,7 +136,7 @@ class PortalAutomation {
     this.statusFor(operation, 'certificate', '교육행정 전자서명 인증서 창을 열고 있습니다.');
     const shown = await this.wait(operation, openCertificateDialog(page, context, (phase, message) => this.statusFor(operation, phase, message), () => operation.cancelled || this.operation !== operation, operation.connectionDeadline), operation.connectionDeadline);
     if (!shown) throw new AuthenticationCancelledError();
-    this.statusFor(operation, 'awaiting-user-auth', 'Edge의 공식 인증서 창에서 인증서를 선택하고 암호를 입력해 주세요.');
+    this.statusFor(operation, 'awaiting-user-auth', '브라우저의 공식 인증서 창에서 인증서를 선택하고 암호를 입력해 주세요.');
     await this.wait(operation, waitForUserAuthentication({ isAuthenticated: () => this.authenticated(page), isCancelled: () => operation.cancelled || this.operation !== operation, pause: this.pause, timeoutMs: this.authTimeoutMs }));
     this.statusFor(operation, 'authenticated', '업무포털 로그인을 확인했습니다.');
     return true;
@@ -166,11 +166,11 @@ class PortalAutomation {
     if (!options.retry) this.retryAction = null;
     const operation = this.createOperation(id, options.automatic === true); this.busy = true; this.operation = operation;
     try {
-      this.statusFor(operation, 'opening', `${menus[id]}을(를) Edge에서 여는 중입니다.`);
+      this.statusFor(operation, 'opening', `${menus[id]}을(를) 브라우저에서 여는 중입니다.`);
       if (this.openPortal) {
-        await this.wait(operation, this.openPortal(`microsoft-edge:${activeOrigins().portal}`, operation), operation.connectionDeadline);
+        await this.wait(operation, this.openPortal(activeOrigins().portal, operation), operation.connectionDeadline);
         if (!this.observeAuthenticated) {
-          const message = '일반 Edge에서 공식 로그인을 마친 뒤 다시 시도를 눌러 주세요.';
+          const message = '일반 브라우저에서 공식 로그인을 마친 뒤 다시 시도를 눌러 주세요.';
           this.retryAction = id; this.statusFor(operation, 'needs-user', message, false);
           return { ok: false, phase: 'needs-user', message };
         }
@@ -183,7 +183,7 @@ class PortalAutomation {
           try {
             await this.wait(operation, waitForUserAuthentication({ isAuthenticated: () => this.observeAuthenticated(operation), isCancelled: () => operation.cancelled || this.operation !== operation, pause: this.pause, timeoutMs: this.authTimeoutMs }));
             this.statusFor(operation, 'authenticated', '업무포털 로그인을 확인했습니다.');
-            if (id !== 'portal' && !this.resumeAction) throw new Error('일반 Edge에서 원래 업무를 이어가는 연결이 아직 구성되지 않았습니다.');
+            if (id !== 'portal' && !this.resumeAction) throw new Error('일반 브라우저에서 원래 업무를 이어가는 연결이 아직 구성되지 않았습니다.');
             if (id !== 'portal') this.statusFor(operation, 'navigating', `${menus[id]} 화면으로 이동하고 있습니다.`);
             resumed = this.resumeAction ? await this.wait(operation, this.resumeAction(id, operation, { draft: options.draft ?? null })) : null;
             break;
@@ -193,7 +193,7 @@ class PortalAutomation {
             if (!this.autoLogin || recovery !== 0 || error?.code !== 'needs-user' || error.reason !== 'authentication-required') throw error;
             this.assertActive(operation);
             this.statusFor(operation, 'awaiting-user-auth', '세션이 종료되어 로그인을 복구하고 있어요. 완료되면 선택한 화면으로 이동합니다.');
-            await this.wait(operation, this.openPortal(`microsoft-edge:${activeOrigins().portal}`, operation, { recoverSession: true }), this.now() + this.connectionTimeoutMs);
+            await this.wait(operation, this.openPortal(activeOrigins().portal, operation, { recoverSession: true }), this.now() + this.connectionTimeoutMs);
           }
         }
         if (resumed?.verified === true) {
@@ -219,7 +219,7 @@ class PortalAutomation {
       if (id === 'portal') { this.statusFor(operation, 'done', '로그인된 업무포털을 열었습니다.', false); return { ok: true, message: '로그인된 업무포털을 열었습니다.' }; }
       const before = new Set(context.pages());
       const target = ['edufine', 'draft'].includes(id) ? ['K-에듀파인'] : ['나이스', 'NEIS'];
-      if (!await this.clickText(portal, target, operation)) throw new Error(`${target[0]} 진입 메뉴를 확인하지 못했습니다. 열린 Edge 화면에서 메뉴 구조 확인이 필요합니다.`);
+      if (!await this.clickText(portal, target, operation)) throw new Error(`${target[0]} 진입 메뉴를 확인하지 못했습니다. 열린 브라우저 화면에서 메뉴 구조 확인이 필요합니다.`);
       let destination = portal;
       for (let index = 0; index < 30; index += 1) {
         await this.wait(operation, this.pause(300));
@@ -233,7 +233,7 @@ class PortalAutomation {
         : id === 'trip' ? [['나의 메뉴', '나의메뉴'], ['복무'], ['출장신청', '출장관리', '출장']]
           : id === 'draft' ? [['문서관리'], ['기안'], ['공용서식'], ['일반기안문 서식(결재4칸 작성4칸)', '일반기안문']] : [];
       for (const labels of paths) {
-        if (!await this.clickText(destination, labels, operation)) throw new Error(`${labels[0]} 메뉴를 현재 화면에서 찾지 못했습니다. 열린 Edge 화면에서 메뉴 구조 확인이 필요합니다.`);
+        if (!await this.clickText(destination, labels, operation)) throw new Error(`${labels[0]} 메뉴를 현재 화면에서 찾지 못했습니다. 열린 브라우저 화면에서 메뉴 구조 확인이 필요합니다.`);
         await this.wait(operation, this.pause(600));
       }
       const message = `${menus[id]} 메뉴 선택을 마쳤습니다. 열린 화면을 확인해 주세요.`;
@@ -248,7 +248,7 @@ class PortalAutomation {
         if (!operation.cancelled) { this.retryAction = id; this.statusFor(operation, 'needs-user', error.message, false, failureDetail(error)); }
         return { ok: false, phase: 'needs-user', message: error.message };
       }
-      const message = error instanceof Error && !/locator\.|browserType\.|page\./.test(error.message) ? error.message : 'Edge 연결 또는 화면 대기 시간이 초과되었습니다. 열린 화면과 연결 상태를 확인해 주세요.';
+      const message = error instanceof Error && !/locator\.|browserType\.|page\./.test(error.message) ? error.message : '브라우저 연결 또는 화면 대기 시간이 초과되었습니다. 열린 화면과 연결 상태를 확인해 주세요.';
       this.statusFor(operation, 'error', message, false, failureDetail(error)); return { ok: false, message };
     } finally { if (this.operation === operation) { this.operation = null; this.busy = false; } }
   }

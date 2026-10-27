@@ -1,6 +1,7 @@
 'use strict';
 
 const { spawn: nodeSpawn } = require('node:child_process');
+const { browserProfile } = require('./browsers.cjs');
 const { NativeHelperWorker } = require('./native-worker.cjs');
 
 const EXPECTED_FORM_CAPTION = '일반기안문 서식(결재4인,협조4인)';
@@ -394,6 +395,7 @@ class NativeDraftHandoffBridge {
   }
 
   run(request, operation = {}) {
+    request = { ...request, browser: browserProfile().id };
     if (operation.cancelled === true) return Promise.reject(new DraftHandoffError('cancelled', 'Native draft handoff was cancelled'));
     if (this.workerRunner) {
       const body = JSON.stringify(request);

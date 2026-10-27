@@ -36,7 +36,8 @@
     ],
     "asarUnpack": [
       "node_modules/playwright-core/**/*",
-      "src/native/**/*"
+      "src/native/**/*",
+      "src/browsers.json"
     ],
     "win": {
       "target": [

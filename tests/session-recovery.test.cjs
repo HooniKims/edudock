@@ -62,7 +62,7 @@ test('expired business tab recovers via existing portal, logs in once, and compl
 test('recovery opens only the official portal when no portal tab exists', async () => {
   const h = harness({ hasPortal: false });
   assert.equal((await h.automation.openMenu('edufine')).phase, 'done');
-  assert.deepEqual(h.external, ['microsoft-edge:https://sen.eduptl.kr']);
+  assert.deepEqual(h.external, ['https://sen.eduptl.kr']);
 });
 
 test('a persistent expiry overlay cannot pass as login despite stale authenticated markers underneath', async () => {

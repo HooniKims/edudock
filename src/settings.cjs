@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { isRegionCode } = require('./regions.cjs');
+const { normalizeBrowser } = require('./browsers.cjs');
 const EDGES = ['top', 'right', 'bottom', 'left'];
 const BUTTONS = ['neis', 'edufine', 'attendance', 'trip', 'draft', 'compose'];
 const defaultOffsets = () => ({ top: 0.5, right: 0.5, bottom: 0.5, left: 0.5 });
@@ -8,6 +9,7 @@ const defaults = () => ({
   schemaVersion: 4,
   // Which 시도교육청 the buttons go to. A new install has none until the teacher picks one.
   region: null,
+  browser: 'edge',
   regionConfirmed: false,
   autoLogin: false,
   launchAtLogin: true,
@@ -62,6 +64,7 @@ function cleanButtons(value) {
 function cleanPatch(patch) {
   if (!patch || typeof patch !== 'object') throw new Error('설정값이 올바르지 않습니다.');
   const result = {};
+  if (Object.hasOwn(patch, 'browser')) result.browser = normalizeBrowser(patch.browser);
   if (typeof patch.alwaysOnTop === 'boolean') result.alwaysOnTop = patch.alwaysOnTop;
   // Kept above 0.3 so the notch can never become invisible and unclickable.
   if (Number.isFinite(patch.opacity)) result.opacity = Math.round(finiteInRange(patch.opacity, 0.3, 1, 1) * 100) / 100;

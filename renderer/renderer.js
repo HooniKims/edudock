@@ -44,6 +44,7 @@ function renderState(next) {
   element('always-on-top').checked = Boolean(next.settings.alwaysOnTop);
   element('auto-login').checked = Boolean(next.settings.autoLogin);
   renderRegion(next);
+  renderBrowser(next);
   const opacityPercent = Math.round((Number.isFinite(next.settings.opacity) ? next.settings.opacity : 1) * 100);
   element('opacity').value = String(opacityPercent);
   element('opacity-value').textContent = `${opacityPercent}%`;
@@ -70,9 +71,27 @@ function renderState(next) {
   element('placement-scale').max = String(maximumScale);
   element('placement-scale').value = String(Math.min(scale, maximumScale));
   element('placement-scale-value').textContent = `${Math.min(scale, maximumScale)}%`;
-  element('login-status-label').textContent = next.authenticationPending ? '공식 인증서 로그인을 기다리는 중' : 'Edge에서 안전하게 로그인';
+  element('login-status-label').textContent = next.authenticationPending ? '공식 인증서 로그인을 기다리는 중' : `${next.browsers?.find(browser => browser.id === next.settings.browser)?.label || 'Microsoft Edge'}에서 안전하게 로그인`;
   element('version').textContent = `업무 곁 · ${next.version || '0.1.0'}`;
 }
+
+function renderBrowser(next) {
+  const select = element('browser-select');
+  select.replaceChildren(...(next.browsers || []).map(browser => {
+    const option = document.createElement('option');
+    option.value = browser.id;
+    option.textContent = `${browser.label}${browser.installed ? '' : ' (설치되지 않음)'}`;
+    return option;
+  }));
+  select.value = next.settings.browser || 'edge';
+  const browser = next.browsers?.find(item => item.id === select.value);
+  element('browser-help').textContent = browser?.installed === false
+    ? `${browser.label}: 설치되지 않았습니다. 설치하거나 다른 브라우저를 선택해 주세요.`
+    : '업무 화면을 열 브라우저입니다. 기본값은 Microsoft Edge입니다.';
+}
+element('browser-select').addEventListener('change', async event => {
+  await updateSettings({ browser: event.target.value });
+});
 
 // The switch shows what Windows will actually do, so an entry switched off in Task Manager reads
 // as off here too. The Store copy is switched in Windows Settings instead.
@@ -115,7 +134,7 @@ function selectKind(kind) {
 
 async function openMenu(id) {
   if (busy) return;
-  status('Edge에서 업무 화면을 여는 중이에요.', 'opening', true);
+  status('브라우저에서 업무 화면을 여는 중이에요.', 'opening', true);
   try {
     const result = await invoke('openMenu', id);
     status(result.message || (result.ok ? '업무 화면을 열었어요. 로그인 상태는 브라우저에서 확인해주세요.' : '업무 화면을 열지 못했어요.'), result.phase || (result.ok ? 'success' : 'error'));
@@ -518,9 +537,10 @@ element('fill-draft').addEventListener('click', async () => {
 // Each check becomes one sentence a teacher can act on; raw field names never reach the screen.
 function diagnosticLines(result) {
   const lines = [];
-  lines.push(result.edgeInstalled
-    ? { tone: 'ok', title: 'Microsoft Edge가 설치되어 있어요.', detail: '업무 화면은 평소 쓰는 Edge에서 열립니다.' }
-    : { tone: 'warn', title: 'Microsoft Edge를 찾지 못했어요.', detail: 'Edge를 설치하거나 업데이트한 뒤 다시 확인해주세요.' });
+  const browserLabel = result.browserLabel || '선택한 브라우저';
+  lines.push(result.browserInstalled
+    ? { tone: 'ok', title: `${browserLabel}: 설치되어 있어요.`, detail: '업무 화면은 설정에서 고른 브라우저에서 열립니다.' }
+    : { tone: 'warn', title: `${browserLabel}: 설치되지 않았어요.`, detail: '브라우저를 설치하거나 설정에서 다른 브라우저를 선택해 주세요.' });
   lines.push(result.helperInstalled
     ? { tone: 'ok', title: '인증서 프로그램(KCase)이 설치되어 있어요.', detail: '업무포털 인증서 로그인을 쓸 수 있습니다.' }
     : { tone: 'warn', title: '인증서 프로그램(KCase)을 찾지 못했어요.', detail: '업무포털 로그인 화면의 안내에 따라 보안 프로그램을 설치해주세요.' });

@@ -6,6 +6,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'browser-profile.ps1')
 [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 
 function Text-FromCodePoints {
@@ -663,7 +664,7 @@ function Get-VerifiedWindowCapture {
     if ($hwnd -eq [IntPtr]::Zero -or -not [DraftWindowCapture]::IsWindowVisible($hwnd)) { return $null }
     $process = Get-Process -Id $OwnerPid -ErrorAction Stop
     try { $processPath = $process.Path } catch { return $null }
-    if ([IO.Path]::GetFileName($processPath) -cne 'msedge.exe') { return $null }
+    if ([IO.Path]::GetFileName($processPath) -ine $script:BrowserProfile.executable) { return $null }
     $rectangle = New-Object DraftWindowCapture+RECT
     if (-not [DraftWindowCapture]::GetWindowRect($hwnd, [ref]$rectangle)) { return $null }
     $width = $rectangle.Right - $rectangle.Left
@@ -749,8 +750,9 @@ function Select-EdufineTab {
     $label = 'K-' + (Text-FromCodePoints @(0xC5D0,0xB4C0,0xD30C,0xC778))
     $tabCondition = [System.Windows.Automation.AndCondition]::new(
         [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::TabItem),
-        [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ClassNameProperty, 'EdgeTab'))
+        [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ClassNameProperty, $script:BrowserProfile.tabClass))
     $candidates = @([System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Descendants, $tabCondition) | Where-Object {
+        (Test-BrowserProcess -OwnerPid $_.Current.ProcessId) -and (Test-BrowserTab -ClassName $_.Current.ClassName -AutomationId $_.Current.AutomationId) -and
         $_.Current.Name -is [string] -and $_.Current.Name.IndexOf($label, [StringComparison]::OrdinalIgnoreCase) -ge 0 -and $_.Current.IsEnabled
     })
     if ($candidates.Count -eq 0) { return $false }
@@ -775,7 +777,7 @@ function Open-RealPublicForm {
     $tabSelected = $false
     $menuDeadline = [DateTime]::UtcNow.AddSeconds(8)
     while (-not $pressed) {
-        $top = @(Get-DescendantByAutomationId -Root $desktop -AutomationId $topId | Where-Object { -not $_.Current.IsOffscreen -and $_.Current.IsEnabled })
+        $top = @(Get-DescendantByAutomationId -Root $desktop -AutomationId $topId | Where-Object { (Test-BrowserProcess -OwnerPid $_.Current.ProcessId) -and -not $_.Current.IsOffscreen -and $_.Current.IsEnabled })
         if ($top.Count -gt 1) { return [pscustomobject]@{ status='needs-user'; reason='browser-or-menu-unavailable' } }
         # Edge renders only the tab in front. If the user switched away since the product
         # activated K-에듀파인, its page is invisible to automation; bring the tab back once.
@@ -1032,6 +1034,7 @@ if ([string]::IsNullOrEmpty($RequestBase64)) {
     $requestText = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($RequestBase64))
 }
 $request = $requestText | ConvertFrom-Json
+Set-BrowserProfile -Id $request.browser
 $fixture = Read-Fixture
 
 switch ([string]$request.command) {

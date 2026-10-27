@@ -1,4 +1,5 @@
 $ErrorActionPreference = 'Stop'
+if ($null -eq $script:BrowserProfiles) { . (Join-Path $PSScriptRoot 'browser-profile.ps1') }
 
 function New-NeisLabel {
     param([int[]]$CodePoints)
@@ -178,7 +179,7 @@ function Find-NeisSemanticControls {
             'my-menu' { $control.role -ceq 'Button' -and (Test-NeisClassTokens -ClassName $control.className -Tokens @('btn-asd','mymenu')); break }
             'duty' { $control.name -ceq $script:NeisTaskLabels.duty -and $control.role -ceq 'MenuItem' -and (Test-NeisClassTokens -ClassName $control.className -Tokens @('cl-folder','cl-level-1','cl-sidenavigation-item')); break }
             'leaf-*' { $control.name -ceq $label -and $control.role -ceq 'Group' -and (Test-NeisClassTokens -ClassName $control.className -Tokens @('cl-leaf','cl-level-2','cl-sidenavigation-item')); break }
-            'tab-*' { $control.name -is [string] -and $control.name.Contains($label) -and $control.role -ceq 'TabItem' -and $control.className -cne 'EdgeTab'; break }
+            'tab-*' { $control.name -is [string] -and $control.name.Contains($label) -and $control.role -ceq 'TabItem' -and $control.className -cne $script:BrowserProfile.tabClass; break }
             'heading-*' { $control.name -ceq $label -and $control.role -ceq 'Group' -and (Test-NeisClassTokens -ClassName $control.className -Tokens @('app-tit')); break }
             default { $false }
         }

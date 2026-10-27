@@ -74,6 +74,35 @@ function assertPublicWindowShape(window) {
   ]);
 }
 
+for (const [browser, processName] of [['aside', 'Aside'], ['chrome', 'chrome']]) {
+  test(`${browser} reads its measured omnibox and tabs while excluding other browsers`, () => {
+    const current = windowFixture({ processName,
+      addressControls: [{ controlType: 'Edit', className: 'OmniboxViewViews', automationId: 'view_1012', name: '주소창 및 검색창', value: 'https://sen.eduptl.kr/', processId: 411, parentClassName: 'LocationBarView', parentControlType: 'Group', parentProcessId: 411 }],
+      documents: [{ controlType: 'Document', className: '', automationId: 'RootWebArea', processId: 411, value: 'https://sen.eduptl.kr/',
+        parents: ['Chrome_RenderWidgetHostHWND', 'Chrome_WidgetWin_1', 'MultiContentsView', 'BrowserView'].map((className, index) => ({ className, controlType: 'Pane', processId: 411, nativeWindowHandle: index === 0 ? 9010 : 0 })),
+      }],
+      systemTabs: [{ system: 'neis', role: 'TabItem', className: 'TabView', automationId: '', visible: true, enabled: true, selectionAvailable: true, processId: 411 }],
+    });
+    const other = windowFixture({ pid: 412, rootProcessId: 412, hwnd: '9002' });
+    const { output } = runBridge(JSON.stringify({ command: 'inspect', browser }), { windows: [current, other] });
+    assert.equal(output.windows.length, 1);
+    assert.equal(output.windows[0].pid, 411);
+    assert.equal(output.windows[0].origin, 'https://sen.eduptl.kr');
+    assert.deepEqual(output.windows[0].availableSystems, ['neis']);
+    current.systemTabs[0].className = 'EdgeTab';
+    current.systemTabs[0].automationId = 'view_24';
+    const rejected = runBridge(JSON.stringify({ command: 'inspect', browser }), { windows: [current] });
+    assert.deepEqual(rejected.output.windows[0].availableSystems, []);
+  });
+}
+
+test('missing or invalid native browser choice keeps the Edge fixture', () => {
+  for (const browser of [undefined, 'unknown']) {
+    const { output } = runBridge(JSON.stringify({ command: 'inspect', browser }), { windows: [windowFixture()] });
+    assert.equal(output.windows.length, 1);
+  }
+});
+
 test('inspect emits only sanitized trusted-window state and exact interactive actions', () => {
   const fixture = { windows: [windowFixture({ controls: [
     { automationId: 'btnLgn', name: 'unmapped label', role: 'Button', visible: true, enabled: true, patterns: ['Invoke'], processId: 411 },

@@ -82,7 +82,7 @@ test('enabled auto-login permits the existing ordinary-Edge flow without inventi
     openPortal: async url => { opened.push(url); },
   });
   const result = await automation.startAutoLogin();
-  assert.deepEqual(opened, ['microsoft-edge:https://sen.eduptl.kr']);
+  assert.deepEqual(opened, ['https://sen.eduptl.kr']);
   assert.equal(result.ok, false);
   assert.equal(result.phase, 'needs-user');
 });

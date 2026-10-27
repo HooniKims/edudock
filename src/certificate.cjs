@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { browserProfile, findBrowserExecutable } = require('./browsers.cjs');
 const { activeOrigins } = require('./regions.cjs');
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function allowPortalHelper(context) {
@@ -17,7 +18,7 @@ async function openCertificateDialog(page, context, status, isCancelled = () => 
   assertPortalOrigin(page.url());
   const password=page.locator('input[name="certPassword"]:visible');
   let clicked=false;
-  status('connecting','Edge에서 인증서 프로그램을 연결하고 있습니다.');
+  status('connecting','브라우저에서 인증서 프로그램을 연결하고 있습니다.');
   while(Date.now()<deadline) {
     if(isCancelled())return false;
     await allowPortalHelper(context);
@@ -29,13 +30,13 @@ async function openCertificateDialog(page, context, status, isCancelled = () => 
     }
     await delay(500);
   }
-  throw new Error('인증서 프로그램 연결이 지연됩니다. Edge의 연결 권한과 프로그램 설치 상태를 확인하세요.');
+  throw new Error('인증서 프로그램 연결이 지연됩니다. 브라우저의 연결 권한과 프로그램 설치 상태를 확인하세요.');
 }
 function diagnostics() {
   // path.join keeps the separators; in a template literal `\M` silently becomes `M`.
   const roots=[process.env['PROGRAMFILES(X86)'],process.env.PROGRAMFILES].filter(Boolean);
-  const edgePaths=roots.map(root=>path.join(root,'Microsoft','Edge','Application','msedge.exe'));
+  const browser = browserProfile();
   const helperPaths=roots.map(root=>path.join(root,'Ksign','KCase','KCaseAgent.exe'));
-  return { edgeInstalled:edgePaths.some(p=>fs.existsSync(p)), helperInstalled:helperPaths.some(p=>fs.existsSync(p)), portal:activeOrigins().portal };
+  return { browser: browser.id, browserLabel: browser.label, browserInstalled: Boolean(findBrowserExecutable(browser.id)), helperInstalled:helperPaths.some(p=>fs.existsSync(p)), portal:activeOrigins().portal };
 }
 module.exports={assertPortalOrigin,openCertificateDialog,diagnostics,delay,allowPortalHelper};
