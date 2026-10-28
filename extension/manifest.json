@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "업무 곁 세션 유지",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "default_locale": "ko",
   "description": "열어 둔 업무포털·K-에듀파인·나이스 탭의 세션을 4분마다 연장합니다. 전국 17개 시도교육청에서 쓸 수 있으며, 처음 한 번 교육청을 고르고 사용을 허용하면 작동합니다.",
   "permissions": [
