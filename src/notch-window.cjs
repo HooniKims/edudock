@@ -89,13 +89,27 @@ function applyOpacity(window, opacity) {
   return value;
 }
 
+// The widget is how the teacher reaches everything, so it stays above every window, always.
+// Being topmost alone was not enough on Windows: another topmost window (a video player, a
+// messenger, a browser popup) that arrives later sits above it, and a fullscreen app or a
+// display change can drop the flag. Re-assert both now and then, without taking the focus.
+const KEEP_ON_TOP_MS = 1500;
+
+function keepOnTop(window, afterRaise) {
+  if (!window || window.isDestroyed() || !window.isVisible() || window.isMinimized()) return false;
+  if (!window.isAlwaysOnTop()) window.setAlwaysOnTop(true, 'floating');
+  window.moveTop();
+  afterRaise?.();
+  return true;
+}
+
 function displayForPlacement(screen, placement) {
   const displays = screen.getAllDisplays();
   const selected = displays.find(display => String(display.id) === placement.monitorId);
   return selected || screen.getPrimaryDisplay();
 }
 
-function createNotchWindow({ BrowserWindow, screen, powerMonitor, settings, preload, onWindow, onInteraction, onPlacementCommit, onPlacementPreview }) {
+function createNotchWindow({ BrowserWindow, screen, powerMonitor, settings, preload, onWindow, onInteraction, onPlacementCommit, onPlacementPreview, onRaised }) {
   let currentSettings = settings;
   // The place the teacher chose. currentSettings.placement is where the widget is shown, which
   // differs while the chosen monitor is not connected; a returning monitor brings it back here.
@@ -107,6 +121,7 @@ function createNotchWindow({ BrowserWindow, screen, powerMonitor, settings, prel
   let ignoreMouse = null;
   let hitTimer;
   let wakeTimer;
+  let topTimer;
   let animationTimer;
   let animationToken = 0;
   let animation = null;
@@ -123,7 +138,7 @@ function createNotchWindow({ BrowserWindow, screen, powerMonitor, settings, prel
     minimizable: false,
     show: false,
     skipTaskbar: true,
-    alwaysOnTop: settings.alwaysOnTop,
+    alwaysOnTop: true,
     backgroundColor: '#00000000',
     hasShadow: false,
     webPreferences: {
@@ -142,7 +157,9 @@ function createNotchWindow({ BrowserWindow, screen, powerMonitor, settings, prel
   });
   const mouseFallback = shouldUseMouseFallback(process.platform, typeof window.setShape === 'function');
   window.setMenu(null);
-  window.setAlwaysOnTop(settings.alwaysOnTop, 'floating');
+  window.setAlwaysOnTop(true, 'floating');
+  const raise = () => keepOnTop(window, onRaised);
+  window.on('show', raise);
   applyOpacity(window, settings.opacity);
 
   const interaction = createInteractionController({
@@ -252,7 +269,7 @@ function createNotchWindow({ BrowserWindow, screen, powerMonitor, settings, prel
     const recovered = recoverPlacement(screen.getAllDisplays(), wantedPlacement, screen.getPrimaryDisplay());
     if (recovered.recovered) currentSettings = { ...currentSettings, placement: recovered.placement };
     if (window.isDestroyed()) return null;
-    window.setAlwaysOnTop(nextSettings.alwaysOnTop, 'floating');
+    window.setAlwaysOnTop(true, 'floating');
     applyOpacity(window, nextSettings.opacity);
     interaction.mode(nextSettings.displayMode);
     const applied = renderProgress(progress);
@@ -275,6 +292,7 @@ function createNotchWindow({ BrowserWindow, screen, powerMonitor, settings, prel
     currentSettings = { ...currentSettings, placement: recovered.placement };
     renderProgress(progress);
     keepRecovered(recovered, 'display-recovery');
+    raise();
   }
 
   function beginPlacement(request) {
@@ -399,6 +417,9 @@ function createNotchWindow({ BrowserWindow, screen, powerMonitor, settings, prel
     }
     wakeTimer = setInterval(observeWakeZone, 32);
     wakeTimer.unref?.();
+    // While a placement is dragged the guide overlays decide the order (they raise the widget).
+    topTimer = setInterval(() => { if (!placementSession) raise(); }, KEEP_ON_TOP_MS);
+    topTimer.unref?.();
   });
   window.on('close', event => {
     if (!window.__allowClose) {
@@ -425,6 +446,7 @@ function createNotchWindow({ BrowserWindow, screen, powerMonitor, settings, prel
     displayListeners = [];
     clearInterval(hitTimer);
     clearInterval(wakeTimer);
+    clearInterval(topTimer);
     settleAnimation();
     interaction.destroy();
     if (!window.isDestroyed()) {
@@ -456,4 +478,4 @@ function createNotchWindow({ BrowserWindow, screen, powerMonitor, settings, prel
   return { window, apply, destroy, dispatch, show, placement, cancelPlacement, get interaction() { return interaction.state(); }, get shape() { return currentShape; } };
 }
 
-module.exports = { createNotchWindow, displayForPlacement, fitShapeToCanvas, isInteractivePoint, shouldUseMouseFallback, applyOpacity, buildTransitionPlan, easeTransition, unionBounds };
+module.exports = { createNotchWindow, keepOnTop, KEEP_ON_TOP_MS, displayForPlacement, fitShapeToCanvas, isInteractivePoint, shouldUseMouseFallback, applyOpacity, buildTransitionPlan, easeTransition, unionBounds };

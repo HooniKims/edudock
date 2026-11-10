@@ -507,6 +507,8 @@ app.whenReady().then(() => {
     preload: path.join(__dirname, 'preload.cjs'),
     onWindow: registerWindow,
     onInteraction: publish,
+    // The bubble belongs next to the widget and must not end up beneath it.
+    onRaised: () => { const bubble = popover?.window; if (bubble && !bubble.isDestroyed() && bubble.isVisible()) bubble.moveTop(); },
     onPlacementCommit: commitPlacement,
     onPlacementPreview: preview => {
       if (preview.active) placementGuide?.show(preview.placement);
@@ -693,7 +695,6 @@ app.whenReady().then(() => {
     return { ok: true };
   });
   handle('window', ['notch', 'auxiliary'], (action, event, role) => {
-    if (action === 'pin') return applySettings({ alwaysOnTop: !settings.alwaysOnTop });
     if (action === 'rotate' || action === 'dock') return cycleEdge();
     if (action === 'monitor') return cycleMonitor();
     const window = BrowserWindow.fromWebContents(event.sender);

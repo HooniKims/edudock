@@ -41,7 +41,6 @@ function renderState(next) {
   const orientation = edge === 'left' || edge === 'right' ? 'vertical' : 'horizontal';
   document.body.dataset.orientation = orientation;
   document.body.dataset.dock = edge;
-  element('always-on-top').checked = Boolean(next.settings.alwaysOnTop);
   element('auto-login').checked = Boolean(next.settings.autoLogin);
   renderRegion(next);
   renderBrowser(next);
@@ -61,7 +60,6 @@ function renderState(next) {
     : next.settings.autoLogin
       ? '켜짐 · 버튼을 누르면 저장된 비밀번호로 바로 로그인해 그 화면까지 가요. 이미 로그인돼 있으면 바로 이동해요.'
       : '꺼짐 · 버튼을 누르면 로그인 창을 열고, 비밀번호는 직접 입력해요.';
-  document.querySelector('.pin-button').setAttribute('aria-pressed', String(Boolean(next.settings.alwaysOnTop)));
   renderLaunchAtLogin(next.loginItem);
   renderMonitorMap(next);
   renderUpdate(next.update, next.version);
@@ -180,7 +178,6 @@ element('region-select').addEventListener('change', async (event) => {
     status(`${event.target.selectedOptions[0]?.textContent || ''} 교육청으로 맞췄어요.`, 'success');
   } catch (error) { renderState(state); report(error); }
 });
-element('always-on-top').addEventListener('change', (event) => updateSettings({ alwaysOnTop: event.target.checked }));
 element('launch-at-login').addEventListener('change', async (event) => {
   const enabled = event.target.checked;
   try {
